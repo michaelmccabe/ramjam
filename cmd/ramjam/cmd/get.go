@@ -11,7 +11,6 @@ import (
 
 var (
 	getTimeout int
-	getHeaders []string
 )
 
 var getCmd = &cobra.Command{
@@ -43,8 +42,6 @@ Example:
 
 		// Set default user agent
 		req.Header.Set("User-Agent", "ramjam-cli")
-
-		// Note: Custom headers support (getHeaders) will be implemented in future version
 
 		if verbose {
 			fmt.Println("Sending request...")
@@ -84,5 +81,4 @@ func init() {
 	rootCmd.AddCommand(getCmd)
 
 	getCmd.Flags().IntVarP(&getTimeout, "timeout", "t", 30, "Request timeout in seconds")
-	getCmd.Flags().StringArrayVarP(&getHeaders, "header", "H", []string{}, "Custom headers to send with the request")
 }

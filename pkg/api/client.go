@@ -29,7 +29,8 @@ func (c *Client) SetVerbose(verbose bool) {
 	c.Verbose = verbose
 }
 
-// Get performs a GET request to the specified path
+// Get performs a GET request to the specified path.
+// The caller is responsible for closing the response body.
 func (c *Client) Get(path string) (*http.Response, error) {
 	url := fmt.Sprintf("%s%s", c.BaseURL, path)
 	
