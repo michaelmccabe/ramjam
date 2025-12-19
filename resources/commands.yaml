@@ -1,0 +1,26 @@
+# Command text definitions for ramjam CLI
+# This file contains the Use, Short, and Long descriptions for all commands
+
+root:
+  use: "ramjam"
+  short: "ramjam - CLI tool to test HTTP APIs"
+  long: |
+    ramjam is a command-line tool designed to test and interact with HTTP APIs.
+
+    It provides a simple and intuitive interface for making HTTP requests,
+    inspecting responses, and validating API behavior.
+
+get:
+  use: "get [url]"
+  short: "Send a GET request to the specified URL"
+  long: |
+    Send a GET request to the specified URL and display the response.
+
+    Example:
+      ramjam get https://api.example.com/users
+      ramjam get https://api.example.com/users --timeout 30
+
+version:
+  use: "version"
+  short: "Print the version number of ramjam"
+  long: "All software has versions. This is ramjam's"
