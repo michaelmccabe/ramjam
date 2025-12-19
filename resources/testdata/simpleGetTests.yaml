@@ -1,0 +1,29 @@
+first-step:
+  description: "A simple GET request to example.com"
+  request:
+    headers:
+      Accept: "text/html"
+    method: "GET"
+    url: "https://www.example.com"
+  expectedResponse:
+    statusCode: 200
+    bodyContains: "Example Domain
+  output:
+    printBody: true
+second-step:
+  description: "GET request to a JSON placeholder API"
+  request:
+    headers:
+      Accept: "application/json"
+    method: "GET"
+    url: "https://jsonplaceholder.typicode.com/posts/1"
+  expectedResponse:
+    statusCode: 200
+    bodyContains: '"id": 1'
+    parsefor:
+      value: "title"
+      SaveAs: "my-title"
+  output:
+    printBody: true
+    printValue:
+      - "my-title"
