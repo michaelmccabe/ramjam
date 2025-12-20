@@ -1,0 +1,32 @@
+metadata:
+  name: "Full Update Integration"
+
+config:
+  base_url: "https://jsonplaceholder.typicode.com"
+
+workflow:
+- step: "update-user-profile"
+  description: "Replace user 1's profile data"
+  request:
+    method: "PUT"
+    url: "${base_url}/users/1"
+    body:
+      id: 1
+      name: "Leanne Graham"
+      username: "Bret"
+      email: "Sincere@april.biz"
+      address:
+        street: "Kulas Light"
+        suite: "Apt. 556"
+        city: "Gwenborough"
+        zipcode: "92998-3874"
+        geo:
+          lat: "-37.3159"
+          lng: "81.1496"
+  expect:
+    status: 200
+    json_path_match:
+    - path: "address.city"
+      value: "Gwenborough"
+    - path: "address.geo.lat"
+      value: "-37.3159"
