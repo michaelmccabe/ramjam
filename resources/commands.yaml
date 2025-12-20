@@ -24,3 +24,13 @@ version:
   use: "version"
   short: "Print the version number of ramjam"
   long: "All software has versions. This is ramjam's"
+
+run:
+  use: "run <files-or-folders...>"
+  short: "Execute YAML-defined API workflows from files or directories"
+  long: |
+    Execute one or more YAML workflow files, or all YAML files in a directory.
+    Examples:
+      ramjam run test-get.yaml
+      ramjam run ./tests/integration/
+      ramjam run login.yaml signup.yaml profile.yaml

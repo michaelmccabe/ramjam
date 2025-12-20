@@ -1,5 +1,6 @@
 metadata:
   name: "Variable Injection Patch"
+  author: "CLI-Tester"
 
 config:
   base_url: "https://jsonplaceholder.typicode.com"

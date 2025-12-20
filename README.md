@@ -102,6 +102,15 @@ With custom timeout:
 ramjam get https://api.example.com/users --timeout 60
 ```
 
+### Running YAML Workflows
+
+Execute one or more workflow files or a directory of workflows:
+```bash
+ramjam run test-get.yaml
+ramjam run ./tests/integration/
+ramjam run login.yaml signup.yaml profile.yaml
+```
+
 ### Global Flags
 
 - `-v, --verbose`: Enable verbose output for detailed request/response information
