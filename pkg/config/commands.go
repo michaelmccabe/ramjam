@@ -10,11 +10,11 @@ type CommandText struct {
 // CommandsConfig holds all command text definitions
 type CommandsConfig struct {
 	Root    CommandText `yaml:"root"`
-	Get     CommandText `yaml:"get"`
+	Run     CommandText `yaml:"run"`
 	Version CommandText `yaml:"version"`
 }
 
-// LoadCommands loads command text from the given YAML file path
+// LoadCommands loads command text from a YAML file
 func LoadCommands(path string) (*CommandsConfig, error) {
 	var config CommandsConfig
 	if err := LoadFile(path, &config); err != nil {
@@ -23,7 +23,7 @@ func LoadCommands(path string) (*CommandsConfig, error) {
 	return &config, nil
 }
 
-// LoadCommandsFromBytes loads command text from YAML bytes (useful for embedded resources)
+// LoadCommandsFromBytes loads command text from byte data
 func LoadCommandsFromBytes(data []byte) (*CommandsConfig, error) {
 	var config CommandsConfig
 	if err := Parse(data, &config); err != nil {

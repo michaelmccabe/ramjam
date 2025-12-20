@@ -1,64 +1,42 @@
 package config
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestLoadCommands(t *testing.T) {
-	// Create a temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "commands_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create a test commands YAML file
-	commandsYAML := `
-root:
-  use: "testcmd"
-  short: "Test command short"
-  long: "Test command long description"
-get:
-  use: "get [url]"
-  short: "Get short"
-  long: "Get long description"
-version:
-  use: "version"
-  short: "Version short"
-  long: "Version long"
-`
-	path := filepath.Join(tmpDir, "commands.yaml")
-	if err := os.WriteFile(path, []byte(commandsYAML), 0644); err != nil {
-		t.Fatalf("Failed to write commands.yaml: %v", err)
-	}
+	// Load the actual commands.yaml file from resources
+	path := filepath.Join("..", "..", "resources", "commands.yaml")
 
 	config, err := LoadCommands(path)
 	if err != nil {
 		t.Fatalf("LoadCommands() error = %v", err)
 	}
 
-	tests := []struct {
-		name     string
-		got      string
-		expected string
-	}{
-		{"root.use", config.Root.Use, "testcmd"},
-		{"root.short", config.Root.Short, "Test command short"},
-		{"root.long", config.Root.Long, "Test command long description"},
-		{"get.use", config.Get.Use, "get [url]"},
-		{"get.short", config.Get.Short, "Get short"},
-		{"version.use", config.Version.Use, "version"},
+	// Validate root command
+	if config.Root.Use != "ramjam" {
+		t.Errorf("Root.Use = %v, want ramjam", config.Root.Use)
+	}
+	if config.Root.Short == "" {
+		t.Error("Root.Short should not be empty")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.got != tt.expected {
-				t.Errorf("%s = %v, want %v", tt.name, tt.got, tt.expected)
-			}
-		})
+	// Validate run command
+	if config.Run.Use == "" {
+		t.Error("Run.Use should not be empty")
+	}
+	if config.Run.Short == "" {
+		t.Error("Run.Short should not be empty")
+	}
+
+	// Validate version command
+	if config.Version.Use != "version" {
+		t.Errorf("Version.Use = %v, want version", config.Version.Use)
+	}
+	if config.Version.Short == "" {
+		t.Error("Version.Short should not be empty")
 	}
 }
 
@@ -68,10 +46,10 @@ root:
   use: "app"
   short: "App short"
   long: "App long"
-get:
-  use: "get"
-  short: "Get short"
-  long: "Get long"
+run:
+  use: "run [file]"
+  short: "Run short"
+  long: "Run long"
 version:
   use: "ver"
   short: "Ver short"
@@ -87,8 +65,12 @@ version:
 		t.Errorf("root.use = %v, want %v", config.Root.Use, "app")
 	}
 
-	if config.Get.Short != "Get short" {
-		t.Errorf("get.short = %v, want %v", config.Get.Short, "Get short")
+	if config.Version.Short != "Ver short" {
+		t.Errorf("version.short = %v, want %v", config.Version.Short, "Ver short")
+	}
+
+	if config.Run.Use != "run [file]" {
+		t.Errorf("run.use = %v, want %v", config.Run.Use, "run [file]")
 	}
 }
 
@@ -116,10 +98,10 @@ root:
     This is a multiline
     long description
     with multiple lines
-get:
-  use: "get"
-  short: "Get"
-  long: "Single line"
+run:
+  use: "run"
+  short: "Run"
+  long: "Run long"
 version:
   use: "version"
   short: "Version"
@@ -137,5 +119,59 @@ version:
 
 	if !strings.Contains(config.Root.Long, "multiple lines") {
 		t.Error("Expected multiline long description to contain 'multiple lines'")
+	}
+}
+
+func TestCommandsConfigValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "valid config",
+			yaml: `
+root:
+  use: "ramjam"
+  short: "Test CLI"
+  long: "Test CLI tool"
+run:
+  use: "run [file]"
+  short: "Execute workflow"
+  long: "Execute a YAML workflow file"
+version:
+  use: "version"
+  short: "Print version"
+  long: "Print the version number"
+`,
+			wantErr: false,
+		},
+		{
+			name: "missing root command",
+			yaml: `
+run:
+  use: "run [file]"
+  short: "Execute workflow"
+version:
+  use: "version"
+  short: "Print version"
+`,
+			wantErr: false, // YAML will just have empty Root
+		},
+		{
+			name:    "empty config",
+			yaml:    ``,
+			wantErr: false, // Empty YAML is valid, just all fields will be empty
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := []byte(tt.yaml)
+			_, err := LoadCommandsFromBytes(data)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("LoadCommandsFromBytes() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

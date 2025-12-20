@@ -18,7 +18,7 @@ import (
 )
 
 type (
-	TestFile struct {
+	InstructionsFile struct {
 		Metadata struct {
 			Name        string `yaml:"name"`
 			Author      string `yaml:"author"`
@@ -126,7 +126,7 @@ func (r *Runner) runFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)
 	}
-	var spec TestFile
+	var spec InstructionsFile
 	if err := yaml.Unmarshal(data, &spec); err != nil {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}

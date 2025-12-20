@@ -3,34 +3,31 @@
 
 root:
   use: "ramjam"
-  short: "ramjam - CLI tool to test HTTP APIs"
+  short: "ramjam - CLI tool to execute HTTP API workflows via YAML"
   long: |
-    ramjam is a command-line tool designed to test and interact with HTTP APIs.
+    ramjam is a command-line tool for executing HTTP API workflows defined in YAML files.
 
-    It provides a simple and intuitive interface for making HTTP requests,
-    inspecting responses, and validating API behavior.
+    All HTTP requests are made through declarative YAML workflow files, providing:
+    - Reproducible API testing
+    - Variable substitution and captures
+    - Response validation with JSONPath
+    - Support for all HTTP methods
 
-get:
-  use: "get [url]"
-  short: "Send a GET request to the specified URL"
+run:
+  use: "run [workflow-file-or-directory]"
+  short: "Execute a YAML workflow or directory of workflows"
   long: |
-    Send a GET request to the specified URL and display the response.
+    Execute HTTP request workflows defined in YAML files.
+
+    Workflows support variable substitution, response validation,
+    and value capturing for use in subsequent requests.
 
     Example:
-      ramjam get https://api.example.com/users
-      ramjam get https://api.example.com/users --timeout 30
+      ramjam run workflow.yaml
+      ramjam run workflows/
+      ramjam run workflow.yaml -v
 
 version:
   use: "version"
   short: "Print the version number of ramjam"
   long: "All software has versions. This is ramjam's"
-
-run:
-  use: "run <files-or-folders...>"
-  short: "Execute YAML-defined API workflows from files or directories"
-  long: |
-    Execute one or more YAML workflow files, or all YAML files in a directory.
-    Examples:
-      ramjam run test-get.yaml
-      ramjam run ./tests/integration/
-      ramjam run login.yaml signup.yaml profile.yaml
