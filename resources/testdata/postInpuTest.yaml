@@ -1,0 +1,31 @@
+metadata:
+  name: "Complex POST Integration"
+  author: "CLI-Tester"
+
+config:
+  base_url: "https://jsonplaceholder.typicode.com"
+
+workflow:
+- step: "create-post-with-payload"
+  description: "Submit a JSON body and capture the new ID"
+  request:
+    method: "POST"
+    url: "${base_url}/posts"
+    # This is a YAML object that your CLI converts to JSON
+    body:
+      title: "New Integration Test"
+      body: "Detailed description of the test case"
+      userId: 10
+      metadata:
+        source: "cli-tool"
+        priority: "high"
+  expect:
+    status: 201
+    json_path_match:
+    - path: "title"
+      value: "New Integration Test"
+    - path: "metadata.source"
+      value: "cli-tool"
+  capture:
+  - json_path: "id"
+    as: "generated_id"

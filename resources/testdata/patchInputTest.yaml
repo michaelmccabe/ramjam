@@ -1,0 +1,28 @@
+metadata:
+  name: "Variable Injection Patch"
+
+config:
+  base_url: "https://jsonplaceholder.typicode.com"
+
+workflow:
+- step: "get-reference-title"
+  request:
+    method: "GET"
+    url: "${base_url}/posts/2"
+  capture:
+  - json_path: "title"
+    as: "original_title"
+
+- step: "patch-with-captured-data"
+  description: "Update post 1 using the title we just stole from post 2"
+  request:
+    method: "PATCH"
+    url: "${base_url}/posts/1"
+    body:
+      title: "Copy of: ${original_title}"
+      updated: true
+  expect:
+    status: 200
+    json_path_match:
+    - path: "title"
+      value: "Copy of: ${original_title}"

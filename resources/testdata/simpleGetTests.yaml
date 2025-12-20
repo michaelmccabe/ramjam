@@ -1,0 +1,58 @@
+metadata:
+  name: "User Cross-Reference Validation"
+  author: "CLI-Tester"
+  description: "Verifies user details via ID and validates within the full user list"
+
+config:
+  base_url: "https://jsonplaceholder.typicode.com"
+
+workflow:
+- step: "get-specific-user"
+  description: "Fetch user 3 and capture deep nested values"
+  request:
+    method: "GET"
+    url: "${base_url}/users/3"
+  expect:
+    status: 200
+    # Validating a deeply nested value
+    json_path_match:
+    - path: "company.catchPhrase"
+      value: "Face to face bifurcated interface"
+  capture:
+  - json_path: "name"
+    as: "captured_user_name"
+  - json_path: "address.city"
+    as: "captured_city"
+
+- step: "validate-user-in-list"
+  description: "Fetch all users and find user 3's name in the array"
+  request:
+    method: "GET"
+    url: "${base_url}/users"
+  expect:
+    status: 200
+    # Logic: Search the array for the object where id is 3, then check the name
+    json_path_match:
+    - path: "$[?(@.id==3)].name"
+      value: "${captured_user_name}"
+    - path: "$[?(@.id==3)].address.city"
+      value: "${captured_city}"
+  output:
+    print: "Successfully verified ${captured_user_name} lives in ${captured_city}"
+
+- step: "fetch-user-posts"
+  description: "Use the ID to fetch posts for that specific user"
+  request:
+    method: "GET"
+    # Using a hardcoded ID for now, but could be captured as ${captured_user_id}
+    url: "${base_url}/posts?userId=3"
+  expect:
+    status: 200
+    json_path_match:
+    - path: "$[0].title"
+      value: "asperiores ea ipsam voluptatibus modi minima quia sint"
+  capture:
+  - json_path: "$[0].title"
+    as: "first_post_title"
+  output:
+    print: "The first post title for user 3 is: ${first_post_title}"
