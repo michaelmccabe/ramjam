@@ -13,11 +13,14 @@ var (
 
 	rootCmd = &cobra.Command{
 		Use:   "ramjam",
-		Short: "ramjam - CLI tool to test HTTP APIs",
-		Long: `ramjam is a command-line tool designed to test and interact with HTTP APIs.
-		
-It provides a simple and intuitive interface for making HTTP requests,
-inspecting responses, and validating API behavior.`,
+		Short: "ramjam - CLI tool to execute HTTP API workflows via YAML",
+		Long: `ramjam is a command-line tool for executing HTTP API workflows defined in YAML files.
+
+All HTTP requests are made through declarative YAML workflow files, providing:
+- Reproducible API testing
+- Variable substitution and captures
+- Response validation with JSONPath
+- Support for all HTTP methods`,
 		Version: Version,
 		Run: func(cmd *cobra.Command, args []string) {
 			// If no subcommand is provided, show help

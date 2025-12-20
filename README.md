@@ -8,17 +8,17 @@ A powerful command-line tool for testing HTTP APIs, built with Go and the Cobra 
 
 ## Features
 
-- 🚀 Simple and intuitive command-line interface
-- 🔧 Built with the Cobra CLI framework
-- 📡 Support for HTTP methods (GET, and more coming soon)
-- ⏱️ Configurable request timeouts
-- 🔍 Verbose mode for detailed request/response information
-- 📦 Easy installation as a local binary
+* 🚀 Simple and intuitive command-line interface
+* 🔧 Built with the Cobra CLI framework
+* 📡 Support for HTTP methods (GET, and more coming soon)
+* ⏱️ Configurable request timeouts
+* 🔍 Verbose mode for detailed request/response information
+* 📦 Easy installation as a local binary
 
 ## Prerequisites
 
-- Go 1.20 or higher
-- Make (for using Makefile commands)
+* Go 1.20 or higher
+* Make (for using Makefile commands)
 
 ## Installation
 
@@ -39,18 +39,24 @@ export PATH=$PATH:$(go env GOPATH)/bin
 
 ### Manual Installation
 
+
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/michaelmccabe/ramjam.git
 cd ramjam
 ```
 
+
 2. Build the binary:
+
 ```bash
 make build
 ```
 
+
 3. (Optional) Move the binary to a location in your PATH:
+
 ```bash
 sudo mv bin/ramjam /usr/local/bin/
 # or
@@ -74,38 +80,35 @@ The binary will be created in the `bin/` directory.
 ### Basic Commands
 
 Display help and available commands:
+
 ```bash
 ramjam --help
 ```
 
 Check version:
+
 ```bash
 ramjam version
 ```
 
 ### Making HTTP Requests
 
-#### GET Request
+`ramjam` makes HTTP requestsby running the workflows defined in the YAML files fed into the tool via the command line.
 
-Send a GET request to an API endpoint:
-```bash
-ramjam get https://api.example.com/users
-```
+### Running YAML Workflows
 
-With verbose output:
-```bash
-ramjam get https://api.example.com/users -v
-```
+Execute one or more workflow files or a directory of workflows:
 
-With custom timeout:
 ```bash
-ramjam get https://api.example.com/users --timeout 60
+ramjam run test-get.yaml
+ramjam run ./tests/integration/
+ramjam run login.yaml signup.yaml profile.yaml
 ```
 
 ### Global Flags
 
-- `-v, --verbose`: Enable verbose output for detailed request/response information
-- `-h, --help`: Display help information
+* `-v, --verbose`: Enable verbose output for detailed request/response information
+* `-h, --help`: Display help information
 
 ## Development
 
@@ -151,6 +154,7 @@ make tidy
 ### Running in Development
 
 Run without building:
+
 ```bash
 make run
 
@@ -161,27 +165,29 @@ go run ./cmd/ramjam
 ### Testing
 
 Run all tests:
+
 ```bash
 make test
 ```
 
 Run tests with coverage report:
+
 ```bash
 make test-coverage
 ```
 
 ## Makefile Targets
 
-- `make build` - Build the binary for the current platform
-- `make install` - Install the binary to `$GOPATH/bin`
-- `make clean` - Remove build artifacts
-- `make test` - Run all tests
-- `make test-coverage` - Run tests with coverage report
-- `make tidy` - Tidy Go module dependencies
-- `make deps` - Download dependencies
-- `make run` - Run the application without building
-- `make build-all` - Build for multiple platforms (Linux, macOS, Windows)
-- `make help` - Display available targets
+* `make build` - Build the binary for the current platform
+* `make install` - Install the binary to `$GOPATH/bin`
+* `make clean` - Remove build artifacts
+* `make test` - Run all tests
+* `make test-coverage` - Run tests with coverage report
+* `make tidy` - Tidy Go module dependencies
+* `make deps` - Download dependencies
+* `make run` - Run the application without building
+* `make build-all` - Build for multiple platforms (Linux, macOS, Windows)
+* `make help` - Display available targets
 
 ## Configuration
 
