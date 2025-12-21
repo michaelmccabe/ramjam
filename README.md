@@ -41,8 +41,6 @@ export PATH=$PATH:$(go env GOPATH)/bin
 
 
 
-
-
 1. Clone the repository:
 
 ```bash
@@ -108,13 +106,12 @@ ramjam run ./tests/integration/
 ramjam run login.yaml signup.yaml profile.yaml
 ```
 
-
 ## Ramjam DSL
 
 The instructions for the HTTP calls ramjam makes are configured in YAML files.
 
 
-### YAML Configuration Example
+### YAML Configuration
 
 Here is how you would configure the capture in your YAML file to parse the `Authorization` header, remove the "Bearer " prefix, and save the token to a variable named `{jwt}`:
 
