@@ -40,6 +40,9 @@ export PATH=$PATH:$(go env GOPATH)/bin
 ### Manual Installation
 
 
+
+
+
 1. Clone the repository:
 
 ```bash
@@ -48,14 +51,14 @@ cd ramjam
 ```
 
 
-2. Build the binary:
+2\. Build the binary:
 
 ```bash
 make build
 ```
 
 
-3. (Optional) Move the binary to a location in your PATH:
+3\. (Optional) Move the binary to a location in your PATH:
 
 ```bash
 sudo mv bin/ramjam /usr/local/bin/
@@ -104,6 +107,26 @@ ramjam run test-get.yaml
 ramjam run ./tests/integration/
 ramjam run login.yaml signup.yaml profile.yaml
 ```
+
+
+## Ramjam DSL
+
+The instructions for the HTTP calls ramjam makes are configured in YAML files.
+
+
+### YAML Configuration Example
+
+Here is how you would configure the capture in your YAML file to parse the `Authorization` header, remove the "Bearer " prefix, and save the token to a variable named `{jwt}`:
+
+
+```
+capture:
+ - header : Authorization
+   regex : Bearer (.*)
+   as : jwt
+ 
+```
+
 
 ### Global Flags
 

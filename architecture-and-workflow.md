@@ -1,8 +1,10 @@
-# ramjam Architecture and Workflow Guide
+> # Ramjam Architecture and Workflow Guide
 
 This document provides a comprehensive overview of the ramjam architecture, its workflow engine, and how to extend the project with new capabilities.
 
 ## Table of Contents
+
+
 
 1. [Architecture Overview](#architecture-overview)
 2. [Core Components](#core-components)
@@ -49,6 +51,8 @@ ramjam follows a clean, layered architecture focused on executing HTTP API workf
 
 ### Design Principles
 
+
+
 1. **Declarative Over Imperative**: All HTTP interactions are defined in YAML, not code
 2. **Single Responsibility**: Each package has a clear, focused purpose
 3. **Testability**: Mock-friendly architecture with dependency injection
@@ -72,10 +76,11 @@ The CLI layer handles command-line interface concerns using the Cobra framework.
 ```
 
 **Key Features**:
-- Global `--verbose` flag for debug output
-- Version display via `--version`
-- Automatic help generation
-- Subcommand registration
+
+* Global `--verbose` flag for debug output
+* Version display via `--version`
+* Automatic help generation
+* Subcommand registration
 
 #### Run Command (`run.go`)
 
@@ -88,10 +93,11 @@ The CLI layer handles command-line interface concerns using the Cobra framework.
 ```
 
 **Key Features**:
-- Accepts single file or directory
-- Sorts workflow files alphabetically
-- Passes verbose flag to runner
-- Error handling and user feedback
+
+* Accepts single file or directory
+* Sorts workflow files alphabetically
+* Passes verbose flag to runner
+* Error handling and user feedback
 
 #### Version Command (`version.go`)
 
@@ -102,8 +108,9 @@ The CLI layer handles command-line interface concerns using the Cobra framework.
 ```
 
 **Key Features**:
-- Version set at build time via ldflags
-- Simple, clean output format
+
+* Version set at build time via ldflags
+* Simple, clean output format
 
 ### 2. Runner Layer (`pkg/runner/`)
 
@@ -173,7 +180,7 @@ type Capture struct {
 
 Variables are substituted using `${varName}` syntax:
 
-```yaml
+```
 variables:
   userId: "123"
   
@@ -185,6 +192,9 @@ steps:
 ```
 
 **Variable Sources** (in order of precedence):
+
+
+
 1. Captured values from previous steps
 2. Workflow-level variables
 3. Environment variables (`${env:VAR_NAME}`)
@@ -194,12 +204,14 @@ steps:
 Two types of validation:
 
 **Status Code Validation**:
+
 ```yaml
 expect:
   status: 200  # Must match exactly
 ```
 
 **JSONPath Validation**:
+
 ```yaml
 expect:
   body:
@@ -236,9 +248,10 @@ func Parse(data []byte, target interface{}) error
 ```
 
 **Use Cases**:
-- Loading workflow files
-- Loading command text configuration
-- Future: instruction files, settings files
+
+* Loading workflow files
+* Loading command text configuration
+* Future: instruction files, settings files
 
 #### Command Text Config (`commands.go`)
 
@@ -386,7 +399,7 @@ Externalizes command descriptions to `resources/commands.yaml`, making them easy
 
 ### Complete Example
 
-```yaml
+```
 # Workflow metadata
 name: "User Management API Tests"
 baseURL: "https://api.example.com"
@@ -472,7 +485,7 @@ steps:
 ### Field Reference
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+|----|----|----|----|
 | `name` | string | Yes | Workflow name for logging |
 | `baseURL` | string | Yes | Base URL for all requests |
 | `timeout` | int | No | Request timeout in seconds (default: 30) |
@@ -482,7 +495,7 @@ steps:
 #### Step Fields
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+|----|----|----|----|
 | `name` | string | Yes | Step name for logging |
 | `method` | string | Yes | HTTP method (GET, POST, PUT, DELETE, PATCH) |
 | `path` | string | Yes | URL path (appended to baseURL) |
@@ -495,21 +508,21 @@ steps:
 #### Expect Fields
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+|----|----|----|----|
 | `status` | int | No | Expected HTTP status code |
 | `body` | array | No | JSONPath expectations |
 
 #### Body Expectation Fields
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+|----|----|----|----|
 | `path` | string | Yes | JSONPath expression |
 | `value` | string | Yes | Expected value (as string) |
 
 #### Capture Fields
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+|----|----|----|----|
 | `name` | string | Yes | Variable name for captured value |
 | `path` | string | Yes | JSONPath to value in response |
 
@@ -521,22 +534,25 @@ All variables use the syntax: `${variableName}`
 
 ### Variable Sources
 
+
+
 1. **Captured Values** (highest precedence)
+
    ```yaml
    capture:
      - name: userId
        path: "$.id"
    # Later: ${userId}
    ```
-
 2. **Workflow Variables**
+
    ```yaml
    variables:
      apiKey: "secret123"
    # Use: ${apiKey}
    ```
-
 3. **Environment Variables**
+
    ```yaml
    # Use: ${env:HOME}
    # Use: ${env:API_KEY}
@@ -545,11 +561,12 @@ All variables use the syntax: `${variableName}`
 ### Where Variables Work
 
 Variables can be used in:
-- Request paths: `path: "/users/${userId}"`
-- Request headers: `Authorization: "Bearer ${token}"`
-- Request body: `"userId": "${userId}"`
-- Output messages: `"User ${userId} created"`
-- Expected values: `value: "${expectedId}"`
+
+* Request paths: `path: "/users/${userId}"`
+* Request headers: `Authorization: "Bearer ${token}"`
+* Request body: `"userId": "${userId}"`
+* Output messages: `"User ${userId} created"`
+* Expected values: `value: "${expectedId}"`
 
 ### Variable Scope
 
@@ -862,12 +879,15 @@ steps:
 
 ### Workflow Design
 
+
+
 1. **Use Descriptive Names**
+
    ```yaml
    name: "User Registration Flow - Happy Path"
    ```
-
 2. **Group Related Steps**
+
    ```yaml
    # Group 1: Setup
    - name: "Setup: Create test data"
@@ -876,22 +896,22 @@ steps:
    # Group 3: Cleanup
    - name: "Cleanup: Remove test data"
    ```
-
 3. **Capture Reusable Values**
+
    ```yaml
    capture:
      - name: authToken
        path: "$.token"
    # Use in subsequent steps
    ```
-
 4. **Use Environment Variables for Secrets**
+
    ```yaml
    headers:
      Authorization: "Bearer ${env:API_TOKEN}"
    ```
-
 5. **Add Helpful Output Messages**
+
    ```yaml
    output:
      - "✓ User ${userId} created successfully"
@@ -901,24 +921,25 @@ steps:
 
 ### Code Organization
 
+
+
 1. **Keep Packages Focused**
-   - `cmd/` - CLI concerns only
-   - `pkg/runner/` - Workflow execution only
-   - `pkg/config/` - Configuration loading only
-
+   * `cmd/` - CLI concerns only
+   * `pkg/runner/` - Workflow execution only
+   * `pkg/config/` - Configuration loading only
 2. **Write Tests First**
-   - Test happy paths
-   - Test error conditions
-   - Use table-driven tests
-
+   * Test happy paths
+   * Test error conditions
+   * Use table-driven tests
 3. **Use Interfaces for Testability**
+
    ```go
    type HTTPClient interface {
        Do(*http.Request) (*http.Response, error)
    }
    ```
-
 4. **Handle Errors Properly**
+
    ```go
    if err != nil {
        return fmt.Errorf("failed to X: %w", err)
@@ -927,20 +948,23 @@ steps:
 
 ### Testing Strategies
 
+
+
 1. **Unit Tests for Logic**
+
    ```go
    func TestVariableSubstitution(t *testing.T) {
        // Test pure functions
    }
    ```
-
 2. **Integration Tests with Mock Servers**
+
    ```go
    server := httptest.NewServer(handler)
    defer server.Close()
    ```
-
 3. **End-to-End Tests with Real Workflows**
+
    ```go
    func TestRunWorkflowFile(t *testing.T) {
        // Test actual YAML workflows
@@ -956,11 +980,13 @@ steps:
 **Problem**: `${userId}` appears literally in output
 
 **Causes**:
-- Variable not captured
-- Typo in variable name
-- Variable scope issue
+
+* Variable not captured
+* Typo in variable name
+* Variable scope issue
 
 **Solution**:
+
 ```bash
 # Run with verbose flag
 ramjam run workflow.yaml -v
@@ -976,11 +1002,13 @@ capture:
 **Problem**: Expectation fails even though value looks correct
 
 **Causes**:
-- Type mismatch (number vs string)
-- Whitespace differences
-- Wrong path
+
+* Type mismatch (number vs string)
+* Whitespace differences
+* Wrong path
 
 **Solution**:
+
 ```yaml
 # Ensure values are strings in expectations
 expect:
@@ -997,11 +1025,13 @@ expect:
 **Problem**: Request times out
 
 **Causes**:
-- Default timeout too short
-- Slow API
-- Network issues
+
+* Default timeout too short
+* Slow API
+* Network issues
 
 **Solution**:
+
 ```yaml
 # Increase timeout
 timeout: 60  # seconds
@@ -1014,11 +1044,13 @@ timeout: 60  # seconds
 **Problem**: `ramjam run workflow.yaml` fails
 
 **Causes**:
-- Wrong path
-- File extension not .yaml or .yml
-- Permission issues
+
+* Wrong path
+* File extension not .yaml or .yml
+* Permission issues
 
 **Solution**:
+
 ```bash
 # Use absolute path
 ramjam run /full/path/to/workflow.yaml
@@ -1032,27 +1064,28 @@ chmod 644 workflow.yaml
 
 ### Debug Techniques
 
+
+
 1. **Use Verbose Flag**
+
    ```bash
    ramjam run workflow.yaml -v
    ```
-
 2. **Add Debug Output**
+
    ```yaml
    output:
      - "DEBUG: userId = ${userId}"
      - "DEBUG: token = ${token}"
    ```
-
 3. **Test Individual Steps**
-   - Create minimal workflow with single step
-   - Verify each step works independently
-
+   * Create minimal workflow with single step
+   * Verify each step works independently
 4. **Check HTTP Responses**
-   - Use verbose mode to see actual responses
-   - Compare with expectations
-
+   * Use verbose mode to see actual responses
+   * Compare with expectations
 5. **Validate YAML Syntax**
+
    ```bash
    # Use online YAML validator
    # Or use yamllint
@@ -1063,25 +1096,26 @@ chmod 644 workflow.yaml
 
 ramjam's architecture is designed for:
 
-- **Simplicity**: Users write YAML, not code
-- **Flexibility**: Easy to extend with new features
-- **Testability**: All components are testable
-- **Maintainability**: Clear separation of concerns
+* **Simplicity**: Users write YAML, not code
+* **Flexibility**: Easy to extend with new features
+* **Testability**: All components are testable
+* **Maintainability**: Clear separation of concerns
 
 Key extension points:
-- New commands (CLI layer)
-- New HTTP methods (Runner layer)
-- New validation types (Runner layer)
-- New authentication methods (Runner layer)
-- Conditional execution (Runner layer)
+
+* New commands (CLI layer)
+* New HTTP methods (Runner layer)
+* New validation types (Runner layer)
+* New authentication methods (Runner layer)
+* Conditional execution (Runner layer)
 
 The workflow-driven approach ensures that:
-- API tests are version controlled
-- Tests are reproducible
-- No programming knowledge required
-- Easy to share across teams
 
----
+* API tests are version controlled
+* Tests are reproducible
+* No programming knowledge required
+* Easy to share across teams
 
-**Last Updated**: 2025-12-19  
-**Author**: ramjam development team
+
+
+**Last Updated**: 2025-12-19**Author**: ramjam development team
