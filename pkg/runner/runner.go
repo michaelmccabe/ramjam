@@ -40,9 +40,10 @@ type (
 	}
 
 	StepRequest struct {
-		Method string                 `yaml:"method"`
-		URL    string                 `yaml:"url"`
-		Body   map[string]interface{} `yaml:"body"`
+		Method  string                 `yaml:"method"`
+		URL     string                 `yaml:"url"`
+		Headers map[string]string      `yaml:"headers"`
+		Body    map[string]interface{} `yaml:"body"`
 	}
 
 	StepExpect struct {
@@ -56,7 +57,9 @@ type (
 	}
 
 	Capture struct {
-		JSONPath string `yaml:"json_path"`
+		JSONPath string `yaml:"json_path,omitempty"`
+		Header   string `yaml:"header,omitempty"`
+		Regex    string `yaml:"regex,omitempty"`
 		As       string `yaml:"as"`
 	}
 
@@ -175,6 +178,10 @@ func (r *Runner) executeStep(step Step, vars map[string]string) error {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	for k, v := range step.Request.Headers {
+		req.Header.Set(k, applyVars(v, vars))
+	}
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("request: %w", err)
@@ -212,11 +219,37 @@ func (r *Runner) executeStep(step Step, vars map[string]string) error {
 	}
 
 	for _, cap := range step.Capture {
-		val, err := evalJSONPath(jsonObj, cap.JSONPath)
-		if err != nil {
-			return fmt.Errorf("capture %s: %w", cap.JSONPath, err)
+		var val interface{}
+		var err error
+
+		if cap.JSONPath != "" {
+			val, err = evalJSONPath(jsonObj, cap.JSONPath)
+			if err != nil {
+				return fmt.Errorf("capture json_path %s: %w", cap.JSONPath, err)
+			}
+		} else if cap.Header != "" {
+			headerVal := resp.Header.Get(cap.Header)
+			if cap.Regex != "" {
+				re, err := regexp.Compile(cap.Regex)
+				if err != nil {
+					return fmt.Errorf("invalid regex %s: %w", cap.Regex, err)
+				}
+				matches := re.FindStringSubmatch(headerVal)
+				if len(matches) > 1 {
+					val = matches[1]
+				} else if len(matches) > 0 {
+					val = matches[0]
+				} else {
+					return fmt.Errorf("regex %s did not match header %s value %q", cap.Regex, cap.Header, headerVal)
+				}
+			} else {
+				val = headerVal
+			}
+		} else {
+			return fmt.Errorf("capture must specify json_path or header")
 		}
-		r.logDebug("Captured %s => %s", cap.JSONPath, fmt.Sprint(val))
+
+		r.logDebug("Captured %s => %s", cap.As, fmt.Sprint(val))
 		vars[cap.As] = fmt.Sprint(val)
 	}
 

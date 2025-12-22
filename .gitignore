@@ -34,5 +34,6 @@ go.work.sum
 
 # Editor/IDE
 # .idea/
+.venv/
 .vscode/
 .instructions/
