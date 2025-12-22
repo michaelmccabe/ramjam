@@ -6,13 +6,156 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
 
+func TestSimpleGet(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/users" {
+			t.Errorf("expected /users, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"users": []}`))
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Simple GET"
+config:
+  base_url: "%s"
+workflow:
+- step: "get-users"
+  request:
+    method: "GET"
+    url: "/users"
+  expect:
+    status: 200
+`, srv.URL)
+
+	runTest(t, yamlContent)
+}
+
+func TestVariableSubstitution(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/config" {
+			w.Write([]byte(`{"id": "123", "role": "admin"}`))
+			return
+		}
+		if r.URL.Path == "/users/123" {
+			if r.Header.Get("X-Request-ID") != "req-123" {
+				t.Errorf("expected header req-123, got %s", r.Header.Get("X-Request-ID"))
+			}
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"id":"123"`) || !strings.Contains(string(body), `"role":"admin"`) {
+				t.Errorf("body mismatch: %s", string(body))
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Variable Substitution"
+config:
+  base_url: "%s"
+workflow:
+- step: "get-id"
+  request:
+    method: "GET"
+    url: "/config"
+  expect:
+    status: 200
+  capture:
+  - json_path: "id"
+    as: "user_id"
+  - json_path: "role"
+    as: "user_role"
+
+- step: "use-vars"
+  request:
+    method: "POST"
+    url: "/users/${user_id}"
+    headers:
+      X-Request-ID: "req-${user_id}"
+    body:
+      id: "${user_id}"
+      role: "${user_role}"
+  expect:
+    status: 200
+`, srv.URL)
+
+	runTest(t, yamlContent)
+}
+
+func TestJsonPathMatching(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/data" {
+			w.Write([]byte(`{
+				"user": {
+					"name": "Alice",
+					"age": 30,
+					"tags": ["admin", "editor"]
+				}
+			}`))
+			return
+		}
+		if r.URL.Path == "/list" {
+			w.Write([]byte(`[
+				{"id": 1, "title": "Hello"},
+				{"id": 2, "title": "World"}
+			]`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "JSONPath Matching"
+config:
+  base_url: "%s"
+workflow:
+- step: "check-json"
+  request:
+    method: "GET"
+    url: "/data"
+  expect:
+    status: 200
+    json_path_match:
+    - path: "user.name"
+      value: "Alice"
+    - path: "user.age"
+      value: "30"
+    - path: "user.tags[0]"
+      value: "admin"
+
+- step: "check-filter"
+  request:
+    method: "GET"
+    url: "/list"
+  expect:
+    status: 200
+    json_path_match:
+    - path: "$[?(@.id==2)].title"
+      value: "World"
+`, srv.URL)
+
+	runTest(t, yamlContent)
+}
+
 func TestCaptureHeaderWithRegex(t *testing.T) {
-	// Mock server
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/login" {
 			w.Header().Set("Authorization", "Bearer my-secret-token")
@@ -35,7 +178,6 @@ func TestCaptureHeaderWithRegex(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	// Create a temporary YAML file
 	yamlContent := fmt.Sprintf(`
 metadata:
   name: "Header Capture Test"
@@ -60,6 +202,124 @@ workflow:
     status: 200
 `, srv.URL)
 
+	runTest(t, yamlContent)
+}
+
+func TestExpectStatusFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Status Failure"
+config:
+  base_url: "%s"
+workflow:
+- step: "fail-status"
+  request:
+    method: "GET"
+    url: "/"
+  expect:
+    status: 200
+`, srv.URL)
+
+	err := runTestError(t, yamlContent)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "expected status 200, got 500") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestExpectJsonPathFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"status": "error"}`))
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "JSONPath Failure"
+config:
+  base_url: "%s"
+workflow:
+- step: "fail-json"
+  request:
+    method: "GET"
+    url: "/"
+  expect:
+    status: 200
+    json_path_match:
+    - path: "status"
+      value: "success"
+`, srv.URL)
+
+	err := runTestError(t, yamlContent)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), `expected "success", got "error"`) {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestDirectoryExecution(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	// Create a temp dir
+	tmpDir, err := os.MkdirTemp("", "ramjam_test_dir")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create two yaml files
+	file1 := filepath.Join(tmpDir, "test1.yaml")
+	content1 := fmt.Sprintf(`
+metadata:
+  name: "Test 1"
+config:
+  base_url: "%s"
+workflow:
+- step: "step1"
+  request:
+    url: "/1"
+`, srv.URL)
+	os.WriteFile(file1, []byte(content1), 0644)
+
+	file2 := filepath.Join(tmpDir, "test2.yaml")
+	content2 := fmt.Sprintf(`
+metadata:
+  name: "Test 2"
+config:
+  base_url: "%s"
+workflow:
+- step: "step2"
+  request:
+    url: "/2"
+`, srv.URL)
+	os.WriteFile(file2, []byte(content2), 0644)
+
+	r := New(10*time.Second, false)
+	if err := r.RunPaths([]string{tmpDir}); err != nil {
+		t.Fatalf("RunPaths failed: %v", err)
+	}
+}
+
+// Helper to run a test from YAML content string
+func runTest(t *testing.T, yamlContent string) {
+	if err := runTestError(t, yamlContent); err != nil {
+		t.Fatalf("RunPaths failed: %v", err)
+	}
+}
+
+func runTestError(t *testing.T, yamlContent string) error {
 	tmpFile, err := os.CreateTemp("", "runner_test_*.yaml")
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
@@ -72,7 +332,5 @@ workflow:
 	tmpFile.Close()
 
 	r := New(10*time.Second, true)
-	if err := r.RunPaths([]string{tmpFile.Name()}); err != nil {
-		t.Fatalf("RunPaths failed: %v", err)
-	}
+	return r.RunPaths([]string{tmpFile.Name()})
 }

@@ -8,8 +8,7 @@ import (
 )
 
 var (
-	// Version is the version of the CLI tool
-	Version = "0.0.1-development"
+	Version = "0.0.1-development" // Version is the version of the CLI tool
 
 	rootCmd = &cobra.Command{
 		Use:   "ramjam",
@@ -21,6 +20,7 @@ All HTTP requests are made through declarative YAML workflow files, providing:
 - Variable substitution and captures
 - Response validation with JSONPath
 - Support for all HTTP methods`,
+
 		Version: Version,
 		Run: func(cmd *cobra.Command, args []string) {
 			// If no subcommand is provided, show help

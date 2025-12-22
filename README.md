@@ -10,7 +10,6 @@ A  command-line tool for testing HTTP APIs, built with Go and using the Cobra fr
 
 * Simple and intuitive command-line interface
 * Built with the Cobra CLI framework
-* Support for HTTP methods (GET, and more coming soon)
 * Configurable request timeouts
 * Verbose mode for detailed request/response information
 * Easy installation as a local binary
@@ -38,6 +37,7 @@ export PATH=$PATH:$(go env GOPATH)/bin
 ```
 
 ### Manual Installation
+
 
 
 
@@ -80,6 +80,8 @@ The binary will be created in the `bin/` directory.
 
 For full details for how to use, see [How To Use Ramjam](./RAMJAM.md).
 
+For details on integrating with CI/CD pipelines, see [CI/CD Integration](./INTEGRATE.md).
+
 ### Basic Commands
 
 Display help and available commands:
@@ -108,6 +110,19 @@ ramjam run ./tests/integration/
 ramjam run login.yaml signup.yaml profile.yaml
 ```
 
+
+You can try this out quickly yourself with the test files included
+
+```javascript
+❯ ramjam run ./resources/testdata                                        
+[INFO] Running workflow file: resources/testdata/patchInputTest.yaml
+[INFO] Running workflow file: resources/testdata/postInpuTest.yaml
+[INFO] Running workflow file: resources/testdata/putInputTest.yaml
+[INFO] Running workflow file: resources/testdata/simpleGetTests.yaml
+Successfully verified Clementine Bauch lives in McKenziehaven
+The first post title for user 3 is: asperiores ea ipsam voluptatibus modi minima quia sint
+```
+
 ### Global Flags
 
 * `-v, --verbose`: Enable verbose output for detailed request/response information
@@ -124,14 +139,16 @@ ramjam/
 │       ├── main.go       # Application entry
 │       └── cmd/          # Cobra command definitions
 │           ├── root.go   # Root command
-│           ├── get.go    # GET command
+│           ├── run.go    # Run command (executes workflows)
 │           └── version.go # Version command
 ├── pkg/
-│   └── api/              # API client package
-│       └── client.go     # HTTP client implementation
+│   ├── config/           # Configuration loading
+│   └── runner/           # Workflow execution logic
+├── resources/            # Test resources and examples
 ├── Makefile              # Build automation
 ├── go.mod                # Go module definition
-├── go.work               # Go workspace
+├── INTEGRATE.md          # CI/CD integration guide
+├── RAMJAM.md             # Usage documentation
 └── README.md             # This file
 ```
 
