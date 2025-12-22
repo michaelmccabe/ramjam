@@ -80,6 +80,8 @@ The binary will be created in the `bin/` directory.
 
 For full details for how to use, see [How To Use Ramjam](./RAMJAM.md).
 
+For details on integrating with CI/CD pipelines, see [CI/CD Integration](./INTEGRATE.md).
+
 ### Basic Commands
 
 Display help and available commands:
