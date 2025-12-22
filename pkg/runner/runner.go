@@ -40,9 +40,10 @@ type (
 	}
 
 	StepRequest struct {
-		Method string                 `yaml:"method"`
-		URL    string                 `yaml:"url"`
-		Body   map[string]interface{} `yaml:"body"`
+		Method  string                 `yaml:"method"`
+		URL     string                 `yaml:"url"`
+		Headers map[string]string      `yaml:"headers"`
+		Body    map[string]interface{} `yaml:"body"`
 	}
 
 	StepExpect struct {
@@ -175,6 +176,10 @@ func (r *Runner) executeStep(step Step, vars map[string]string) error {
 	req.Header.Set("User-Agent", "ramjam-cli")
 	if bodyReader != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+
+	for k, v := range step.Request.Headers {
+		req.Header.Set(k, applyVars(v, vars))
 	}
 
 	resp, err := r.client.Do(req)

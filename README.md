@@ -1,6 +1,6 @@
 # ramjam
 
-A powerful command-line tool for testing HTTP APIs, built with Go and the Cobra framework.
+A  command-line tool for testing HTTP APIs, built with Go and using the Cobra framework.
 
 ## Overview
 
@@ -8,12 +8,12 @@ A powerful command-line tool for testing HTTP APIs, built with Go and the Cobra 
 
 ## Features
 
-* 🚀 Simple and intuitive command-line interface
-* 🔧 Built with the Cobra CLI framework
-* 📡 Support for HTTP methods (GET, and more coming soon)
-* ⏱️ Configurable request timeouts
-* 🔍 Verbose mode for detailed request/response information
-* 📦 Easy installation as a local binary
+* Simple and intuitive command-line interface
+* Built with the Cobra CLI framework
+* Support for HTTP methods (GET, and more coming soon)
+* Configurable request timeouts
+* Verbose mode for detailed request/response information
+* Easy installation as a local binary
 
 ## Prerequisites
 
@@ -78,6 +78,8 @@ The binary will be created in the `bin/` directory.
 
 ## Usage
 
+For full details for how to use, see [documentation](./RAMJAM.md).
+
 ### Basic Commands
 
 Display help and available commands:
@@ -94,7 +96,7 @@ ramjam version
 
 ### Making HTTP Requests
 
-`ramjam` makes HTTP requestsby running the workflows defined in the YAML files fed into the tool via the command line.
+`ramjam` makes HTTP requests by running the workflows defined in the YAML files fed into the tool via the command line.
 
 ### Running YAML Workflows
 
@@ -105,25 +107,6 @@ ramjam run test-get.yaml
 ramjam run ./tests/integration/
 ramjam run login.yaml signup.yaml profile.yaml
 ```
-
-## Ramjam DSL
-
-The instructions for the HTTP calls ramjam makes are configured in YAML files.
-
-
-### YAML Configuration
-
-Here is how you would configure the capture in your YAML file to parse the `Authorization` header, remove the "Bearer " prefix, and save the token to a variable named `{jwt}`:
-
-
-```
-capture:
- - header : Authorization
-   regex : Bearer (.*)
-   as : jwt
- 
-```
-
 
 ### Global Flags
 
@@ -212,14 +195,6 @@ make test-coverage
 ## Configuration
 
 Currently, `ramjam` uses command-line flags for configuration. Future versions may include support for configuration files.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is open source and available under the MIT License.
 
 ## Support
 
