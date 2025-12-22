@@ -193,4 +193,11 @@ workflow:
 ```
 
 
+## Integrating ramjam into your development workflow
+
+I suggest to use Ramjam most effectively in a CI pipeline, you should install `ramjam` to your local machine and add a ramjam folder to your project. 
+
+
+Add ramjam YAML files to this folder as you proceed, so you can reuse them later on for your CI/CD pipelines.
+
 
