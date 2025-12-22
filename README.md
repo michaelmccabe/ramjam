@@ -78,7 +78,7 @@ The binary will be created in the `bin/` directory.
 
 ## Usage
 
-For full details for how to use, see [documentation](./RAMJAM.md).
+For full details for how to use, see [How To Use Ramjam](./RAMJAM.md).
 
 ### Basic Commands
 
