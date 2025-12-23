@@ -229,8 +229,9 @@ workflow:
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+
 	if !strings.Contains(err.Error(), "expected status 200, got 500") {
-		t.Errorf("unexpected error message: %v", err)
+		t.Errorf("did not find expected error message 'expected status 200, got 500'. Got: %v", err)
 	}
 }
 
@@ -261,8 +262,9 @@ workflow:
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+
 	if !strings.Contains(err.Error(), `expected "success", got "error"`) {
-		t.Errorf("unexpected error message: %v", err)
+		t.Errorf("did not find expected error message 'expected \"success\", got \"error\"'. Got: %v", err)
 	}
 }
 
@@ -309,6 +311,53 @@ workflow:
 	r := New(10*time.Second, false)
 	if err := r.RunPaths([]string{tmpDir}); err != nil {
 		t.Fatalf("RunPaths failed: %v", err)
+	}
+}
+
+func TestContinueOnFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/fail" {
+			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Continue On Failure"
+config:
+  base_url: "%s"
+workflow:
+- step: "fail-step"
+  request:
+    url: "/fail"
+  expect:
+    status: 200
+- step: "success-step"
+  request:
+    url: "/success"
+  expect:
+    status: 200
+`, srv.URL)
+
+	err := runTestError(t, yamlContent)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// Verify the error message
+	if !strings.Contains(err.Error(), "expected status 200, got 500") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// Verify we have exactly 1 error if possible (errors.Join returns an interface{ Unwrap() []error })
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		errs := joined.Unwrap()
+		if len(errs) != 1 {
+			t.Fatalf("expected 1 error, got %d", len(errs))
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -66,7 +68,22 @@ type (
 	Output struct {
 		Print string `yaml:"print"`
 	}
+
+	StepError struct {
+		File        string
+		Step        string
+		Description string
+		Err         error
+	}
 )
+
+func (e *StepError) Error() string {
+	return fmt.Sprintf("step %q in %s failed: %v", e.Step, e.File, e.Err)
+}
+
+func (e *StepError) Unwrap() error {
+	return e.Err
+}
 
 type Runner struct {
 	client  *http.Client
@@ -84,70 +101,126 @@ func (r *Runner) RunPaths(paths []string) error {
 	if len(paths) == 0 {
 		return fmt.Errorf("no paths provided")
 	}
+
+	var files []string
 	for _, p := range paths {
-		if err := r.runPath(p); err != nil {
+		fs, err := r.collectFiles(p)
+		if err != nil {
 			return err
 		}
+		files = append(files, fs...)
 	}
-	return nil
+
+	if len(files) == 0 {
+		return fmt.Errorf("no files found")
+	}
+
+	var wg sync.WaitGroup
+	type result struct {
+		logs []string
+		err  error
+	}
+	results := make(chan result, len(files))
+
+	for _, f := range files {
+		wg.Add(1)
+		go func(f string) {
+			defer wg.Done()
+			logs, err := r.runFile(f)
+			results <- result{logs, err}
+		}(f)
+	}
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var errs []error
+	for res := range results {
+		for _, l := range res.logs {
+			fmt.Println(l)
+		}
+		if res.err != nil {
+			errs = append(errs, res.err)
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
-func (r *Runner) runPath(path string) error {
+func (r *Runner) collectFiles(path string) ([]string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("unable to access %s: %w", path, err)
+		return nil, fmt.Errorf("unable to access %s: %w", path, err)
 	}
-	if info.IsDir() {
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			return fmt.Errorf("unable to read dir %s: %w", path, err)
-		}
-		var files []string
-		for _, e := range entries {
-			if e.IsDir() {
-				continue
-			}
-			if strings.HasSuffix(e.Name(), ".yaml") || strings.HasSuffix(e.Name(), ".yml") {
-				files = append(files, filepath.Join(path, e.Name()))
-			}
-		}
-		sort.Strings(files)
-		for _, f := range files {
-			if err := r.runFile(f); err != nil {
-				return err
-			}
-		}
-		return nil
+	if !info.IsDir() {
+		return []string{path}, nil
 	}
-	return r.runFile(path)
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read dir %s: %w", path, err)
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(e.Name(), ".yaml") || strings.HasSuffix(e.Name(), ".yml") {
+			files = append(files, filepath.Join(path, e.Name()))
+		}
+	}
+	sort.Strings(files)
+	return files, nil
 }
 
-func (r *Runner) runFile(path string) error {
-	r.logInfo("Running workflow file: %s", path)
+func (r *Runner) runFile(path string) ([]string, error) {
+	var logs []string
+	prefix := filepath.Base(path)
+	log := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		logs = append(logs, fmt.Sprintf("[%s] %s", prefix, msg))
+	}
+
+	log("Running workflow file: %s", path)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", path, err)
+		return logs, fmt.Errorf("read %s: %w", path, err)
 	}
 	var spec InstructionsFile
 	if err := yaml.Unmarshal(data, &spec); err != nil {
-		return fmt.Errorf("parse %s: %w", path, err)
+		return logs, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	if spec.Metadata.Name != "" {
+		prefix = spec.Metadata.Name
 	}
 
 	vars := map[string]string{
 		"base_url": spec.Config.BaseURL,
 	}
 
+	var errs []error
 	for _, step := range spec.Workflow {
-		if err := r.executeStep(step, vars); err != nil {
-			return fmt.Errorf("step %q failed: %w", step.Step, err)
+		if err := r.executeStep(step, vars, log); err != nil {
+			errs = append(errs, &StepError{
+				File:        path,
+				Step:        step.Step,
+				Description: step.Description,
+				Err:         err,
+			})
 		}
 	}
-	return nil
+
+	return logs, errors.Join(errs...)
 }
 
-func (r *Runner) executeStep(step Step, vars map[string]string) error {
-	r.logDebug("Executing step: %s", step.Step)
+func (r *Runner) executeStep(step Step, vars map[string]string, log func(string, ...interface{})) error {
+	if r.verbose {
+		log("Executing step: %s", step.Step)
+	}
 
 	method := strings.ToUpper(strings.TrimSpace(step.Request.Method))
 	if method == "" {
@@ -188,7 +261,9 @@ func (r *Runner) executeStep(step Step, vars map[string]string) error {
 	}
 	defer resp.Body.Close()
 
-	r.logDebug("Received status: %d", resp.StatusCode)
+	if r.verbose {
+		log("Received status: %d", resp.StatusCode)
+	}
 
 	if step.Expect.Status != 0 && resp.StatusCode != step.Expect.Status {
 		return fmt.Errorf("expected status %d, got %d", step.Expect.Status, resp.StatusCode)
@@ -212,7 +287,9 @@ func (r *Runner) executeStep(step Step, vars map[string]string) error {
 			return fmt.Errorf("jsonpath %s: %w", matcher.Path, err)
 		}
 		expected := applyVars(fmt.Sprint(matcher.Value), vars)
-		r.logDebug("Asserting %s == %s", matcher.Path, expected)
+		if r.verbose {
+			log("Asserting %s == %s", matcher.Path, expected)
+		}
 		if fmt.Sprint(actual) != expected {
 			return fmt.Errorf("jsonpath %s expected %q, got %q", matcher.Path, expected, actual)
 		}
@@ -249,13 +326,15 @@ func (r *Runner) executeStep(step Step, vars map[string]string) error {
 			return fmt.Errorf("capture must specify json_path or header")
 		}
 
-		r.logDebug("Captured %s => %s", cap.As, fmt.Sprint(val))
+		if r.verbose {
+			log("Captured %s => %s", cap.As, fmt.Sprint(val))
+		}
 		vars[cap.As] = fmt.Sprint(val)
 	}
 
 	if step.Output.Print != "" {
 		msg := applyVars(step.Output.Print, vars)
-		fmt.Println(msg)
+		log("%s", msg)
 	}
 
 	return nil
@@ -381,14 +460,4 @@ func evalJSONPath(obj interface{}, path string) (interface{}, error) {
 		}
 	}
 	return cur, nil
-}
-
-func (r *Runner) logInfo(format string, args ...interface{}) {
-	fmt.Printf("[INFO] "+format+"\n", args...)
-}
-
-func (r *Runner) logDebug(format string, args ...interface{}) {
-	if r.verbose {
-		fmt.Printf("[DEBUG] "+format+"\n", args...)
-	}
 }
