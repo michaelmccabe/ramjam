@@ -155,6 +155,47 @@ workflow:
 	runTest(t, yamlContent)
 }
 
+func TestExpectHeaders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Length", "520")
+		w.Header().Set("Cache-Control", "max-age=3600, public")
+		payload := `{"status": "ok"}`
+		if pad := 520 - len(payload); pad > 0 {
+			payload += strings.Repeat(" ", pad)
+		}
+		w.Write([]byte(payload))
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Header Expect"
+config:
+  base_url: "%s"
+workflow:
+- step: "header-check"
+  request:
+    method: "GET"
+    url: "/users"
+  expect:
+    status: 200
+    headers:
+    - name: "Content-Type"
+      contains: "application/json"
+    - name: "Content-Length"
+      value: "520"
+  capture:
+  - header: "Cache-Control"
+    regex: "max-age=([0-9]+)"
+    as: "cache_max_age"
+  output:
+    print: "Cache max-age is ${cache_max_age}"
+`, srv.URL)
+
+	runTest(t, yamlContent)
+}
+
 func TestCaptureHeaderWithRegex(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/login" {

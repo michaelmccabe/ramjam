@@ -17,7 +17,8 @@ GOFLAGS?=-mod=mod
 BUILD_DIR=bin
 
 # Version information
-VERSION?=dev
+GIT_VERSION := $(shell git describe --tags --dirty --always 2>/dev/null)
+VERSION ?= $(if $(GIT_VERSION),$(GIT_VERSION),0.0.1-development)
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 

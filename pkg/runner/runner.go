@@ -49,13 +49,20 @@ type (
 	}
 
 	StepExpect struct {
-		Status        int           `yaml:"status"`
-		JSONPathMatch []JSONPathVal `yaml:"json_path_match"`
+		Status        int                 `yaml:"status"`
+		JSONPathMatch []JSONPathVal       `yaml:"json_path_match"`
+		Headers       []HeaderExpectation `yaml:"headers"`
 	}
 
 	JSONPathVal struct {
 		Path  string      `yaml:"path"`
 		Value interface{} `yaml:"value"`
+	}
+
+	HeaderExpectation struct {
+		Name     string `yaml:"name"`
+		Value    string `yaml:"value,omitempty"`
+		Contains string `yaml:"contains,omitempty"`
 	}
 
 	Capture struct {
@@ -118,7 +125,7 @@ func (r *Runner) RunPaths(paths []string) error {
 	var wg sync.WaitGroup
 	type result struct {
 		logs []string
-		err  error
+		errs []error
 	}
 	results := make(chan result, len(files))
 
@@ -126,8 +133,8 @@ func (r *Runner) RunPaths(paths []string) error {
 		wg.Add(1)
 		go func(f string) {
 			defer wg.Done()
-			logs, err := r.runFile(f)
-			results <- result{logs, err}
+			logs, errs := r.runFile(f)
+			results <- result{logs: logs, errs: errs}
 		}(f)
 	}
 
@@ -141,9 +148,13 @@ func (r *Runner) RunPaths(paths []string) error {
 		for _, l := range res.logs {
 			fmt.Println(l)
 		}
-		if res.err != nil {
-			errs = append(errs, res.err)
+		if len(res.errs) > 0 {
+			errs = append(errs, res.errs...)
 		}
+	}
+
+	if len(errs) == 0 {
+		return nil
 	}
 
 	return errors.Join(errs...)
@@ -175,7 +186,7 @@ func (r *Runner) collectFiles(path string) ([]string, error) {
 	return files, nil
 }
 
-func (r *Runner) runFile(path string) ([]string, error) {
+func (r *Runner) runFile(path string) ([]string, []error) {
 	var logs []string
 	prefix := filepath.Base(path)
 	log := func(format string, args ...interface{}) {
@@ -187,11 +198,11 @@ func (r *Runner) runFile(path string) ([]string, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return logs, fmt.Errorf("read %s: %w", path, err)
+		return logs, []error{fmt.Errorf("read %s: %w", path, err)}
 	}
 	var spec InstructionsFile
 	if err := yaml.Unmarshal(data, &spec); err != nil {
-		return logs, fmt.Errorf("parse %s: %w", path, err)
+		return logs, []error{fmt.Errorf("parse %s: %w", path, err)}
 	}
 
 	if spec.Metadata.Name != "" {
@@ -214,7 +225,7 @@ func (r *Runner) runFile(path string) ([]string, error) {
 		}
 	}
 
-	return logs, errors.Join(errs...)
+	return logs, errs
 }
 
 func (r *Runner) executeStep(step Step, vars map[string]string, log func(string, ...interface{})) error {
@@ -267,6 +278,35 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 
 	if step.Expect.Status != 0 && resp.StatusCode != step.Expect.Status {
 		return fmt.Errorf("expected status %d, got %d", step.Expect.Status, resp.StatusCode)
+	}
+
+	for _, headerExpect := range step.Expect.Headers {
+		name := strings.TrimSpace(headerExpect.Name)
+		if name == "" {
+			return fmt.Errorf("header expectation must specify a name")
+		}
+		if headerExpect.Value == "" && headerExpect.Contains == "" {
+			return fmt.Errorf("header expectation for %s must specify value or contains", name)
+		}
+		actual := resp.Header.Get(name)
+		if headerExpect.Value != "" {
+			expected := applyVars(headerExpect.Value, vars)
+			if r.verbose {
+				log("Asserting header %s == %s", name, expected)
+			}
+			if actual != expected {
+				return fmt.Errorf("expected header %s to equal %q, got %q", name, expected, actual)
+			}
+		}
+		if headerExpect.Contains != "" {
+			expected := applyVars(headerExpect.Contains, vars)
+			if r.verbose {
+				log("Asserting header %s contains %s", name, expected)
+			}
+			if !strings.Contains(actual, expected) {
+				return fmt.Errorf("expected header %s to contain %q, got %q", name, expected, actual)
+			}
+		}
 	}
 
 	rawBody, err := io.ReadAll(resp.Body)
