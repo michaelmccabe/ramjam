@@ -113,7 +113,7 @@ ramjam run login.yaml signup.yaml profile.yaml
 
 You can try this out quickly yourself with the test files included
 
-```javascript
+```bash
 ❯ ramjam run ./resources/testdata                                        
 [simpleGetTests.yaml] Running workflow file: resources/testdata/simpleGetTests.yaml
 [User Cross-Reference Validation] Successfully verified Clementine Bauch lives in McKenziehaven
