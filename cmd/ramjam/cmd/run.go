@@ -26,8 +26,8 @@ Examples:
 			return nil
 		}
 
-		if we, ok := err.(*runner.WorkflowError); ok {
-			for _, e := range we.Errors {
+		if errs, ok := err.(interface{ Unwrap() []error }); ok {
+			for _, e := range errs.Unwrap() {
 				if se, ok := e.(*runner.StepError); ok {
 					fmt.Printf("Failed step: %s\n", se.Step)
 					if verbose {
@@ -38,7 +38,7 @@ Examples:
 					fmt.Printf("Error: %v\n", e)
 				}
 			}
-			return fmt.Errorf("workflow failed with %d errors", len(we.Errors))
+			return fmt.Errorf("workflow failed with %d errors", len(errs.Unwrap()))
 		}
 
 		return fmt.Errorf("run failed: %w", err)

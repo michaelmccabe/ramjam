@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -74,18 +75,14 @@ type (
 		Description string
 		Err         error
 	}
-
-	WorkflowError struct {
-		Errors []error
-	}
 )
 
 func (e *StepError) Error() string {
 	return fmt.Sprintf("step %q in %s failed: %v", e.Step, e.File, e.Err)
 }
 
-func (e *WorkflowError) Error() string {
-	return fmt.Sprintf("%d steps failed", len(e.Errors))
+func (e *StepError) Unwrap() error {
+	return e.Err
 }
 
 type Runner struct {
@@ -145,18 +142,11 @@ func (r *Runner) RunPaths(paths []string) error {
 			fmt.Println(l)
 		}
 		if res.err != nil {
-			if we, ok := res.err.(*WorkflowError); ok {
-				errs = append(errs, we.Errors...)
-			} else {
-				errs = append(errs, res.err)
-			}
+			errs = append(errs, res.err)
 		}
 	}
 
-	if len(errs) > 0 {
-		return &WorkflowError{Errors: errs}
-	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (r *Runner) collectFiles(path string) ([]string, error) {
@@ -224,10 +214,7 @@ func (r *Runner) runFile(path string) ([]string, error) {
 		}
 	}
 
-	if len(errs) > 0 {
-		return logs, &WorkflowError{Errors: errs}
-	}
-	return logs, nil
+	return logs, errors.Join(errs...)
 }
 
 func (r *Runner) executeStep(step Step, vars map[string]string, log func(string, ...interface{})) error {

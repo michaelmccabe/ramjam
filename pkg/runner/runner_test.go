@@ -230,24 +230,8 @@ workflow:
 		t.Fatal("expected error, got nil")
 	}
 
-	we, ok := err.(*WorkflowError)
-	if !ok {
-		t.Fatalf("expected WorkflowError, got %T: %v", err, err)
-	}
-
-	found := false
-	for _, e := range we.Errors {
-		if strings.Contains(e.Error(), "expected status 200, got 500") {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("did not find expected error message 'expected status 200, got 500'. Got errors:")
-		for _, e := range we.Errors {
-			t.Logf("- %v", e)
-		}
+	if !strings.Contains(err.Error(), "expected status 200, got 500") {
+		t.Errorf("did not find expected error message 'expected status 200, got 500'. Got: %v", err)
 	}
 }
 
@@ -279,24 +263,8 @@ workflow:
 		t.Fatal("expected error, got nil")
 	}
 
-	we, ok := err.(*WorkflowError)
-	if !ok {
-		t.Fatalf("expected WorkflowError, got %T: %v", err, err)
-	}
-
-	found := false
-	for _, e := range we.Errors {
-		if strings.Contains(e.Error(), `expected "success", got "error"`) {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		t.Errorf("did not find expected error message 'expected \"success\", got \"error\"'. Got errors:")
-		for _, e := range we.Errors {
-			t.Logf("- %v", e)
-		}
+	if !strings.Contains(err.Error(), `expected "success", got "error"`) {
+		t.Errorf("did not find expected error message 'expected \"success\", got \"error\"'. Got: %v", err)
 	}
 }
 
@@ -379,19 +347,17 @@ workflow:
 		t.Fatal("expected error, got nil")
 	}
 
-	we, ok := err.(*WorkflowError)
-	if !ok {
-		t.Fatalf("expected WorkflowError, got %T: %v", err, err)
+	// Verify the error message
+	if !strings.Contains(err.Error(), "expected status 200, got 500") {
+		t.Errorf("unexpected error message: %v", err)
 	}
 
-	// We expect exactly 1 error from the first step
-	if len(we.Errors) != 1 {
-		t.Fatalf("expected 1 error, got %d", len(we.Errors))
-	}
-
-	// Verify the error is from the first step
-	if !strings.Contains(we.Errors[0].Error(), "expected status 200, got 500") {
-		t.Errorf("unexpected error message: %v", we.Errors[0])
+	// Verify we have exactly 1 error if possible (errors.Join returns an interface{ Unwrap() []error })
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		errs := joined.Unwrap()
+		if len(errs) != 1 {
+			t.Fatalf("expected 1 error, got %d", len(errs))
+		}
 	}
 }
 
