@@ -115,12 +115,17 @@ You can try this out quickly yourself with the test files included
 
 ```javascript
 ❯ ramjam run ./resources/testdata                                        
-[INFO] Running workflow file: resources/testdata/patchInputTest.yaml
-[INFO] Running workflow file: resources/testdata/postInpuTest.yaml
-[INFO] Running workflow file: resources/testdata/putInputTest.yaml
-[INFO] Running workflow file: resources/testdata/simpleGetTests.yaml
-Successfully verified Clementine Bauch lives in McKenziehaven
-The first post title for user 3 is: asperiores ea ipsam voluptatibus modi minima quia sint
+[simpleGetTests.yaml] Running workflow file: resources/testdata/simpleGetTests.yaml
+[User Cross-Reference Validation] Successfully verified Clementine Bauch lives in McKenziehaven
+[User Cross-Reference Validation] The first post title for user 3 is: asperiores ea ipsam voluptatibus modi minima quia sint
+[FailingGetTests.yaml] Running workflow file: resources/testdata/FailingGetTests.yaml
+[patchInputTest.yaml] Running workflow file: resources/testdata/patchInputTest.yaml
+[postInpuTest.yaml] Running workflow file: resources/testdata/postInpuTest.yaml
+[putInputTest.yaml] Running workflow file: resources/testdata/putInputTest.yaml
+Failed step: get-specific-user
+Failed step: validate-user-in-list
+Failed step: fetch-user-posts
+Error: workflow failed with 3 errors
 ```
 
 ### Global Flags
