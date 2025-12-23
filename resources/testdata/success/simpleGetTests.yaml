@@ -37,8 +37,17 @@ workflow:
       value: "${captured_user_name}"
     - path: "$[?(@.id==3)].address.city"
       value: "${captured_city}"
+    headers:
+    - name: "Content-Type"
+      contains: "application/json"
+    - name: "access-control-allow-credentials"
+      value: "true"
+  capture:
+  - header: "Cache-Control"
+    regex: "max-age=([0-9]+)"
+    as: "cache_max_age"
   output:
-    print: "Successfully verified ${captured_user_name} lives in ${captured_city}"
+    print: "Successfully verified ${captured_user_name} lives in ${captured_city} with cache max-age ${cache_max_age}"
 
 - step: "fetch-user-posts"
   description: "Use the ID to fetch posts for that specific user"
