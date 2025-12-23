@@ -20,10 +20,28 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		r := runner.New(30*time.Second, verbose)
-		if err := r.RunPaths(args); err != nil {
-			return fmt.Errorf("run failed: %w", err)
+		err := r.RunPaths(args)
+		if err == nil {
+			fmt.Println("All steps were run successfully")
+			return nil
 		}
-		return nil
+
+		if we, ok := err.(*runner.WorkflowError); ok {
+			for _, e := range we.Errors {
+				if se, ok := e.(*runner.StepError); ok {
+					fmt.Printf("Failed step: %s\n", se.Step)
+					if verbose {
+						fmt.Printf("Description: %s\n", se.Description)
+						fmt.Printf("Error: %v\n", se.Err)
+					}
+				} else {
+					fmt.Printf("Error: %v\n", e)
+				}
+			}
+			return fmt.Errorf("workflow failed with %d errors", len(we.Errors))
+		}
+
+		return fmt.Errorf("run failed: %w", err)
 	},
 }
 
