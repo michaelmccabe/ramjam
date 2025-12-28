@@ -42,10 +42,13 @@ type (
 	}
 
 	StepRequest struct {
-		Method  string                 `yaml:"method"`
-		URL     string                 `yaml:"url"`
-		Headers map[string]string      `yaml:"headers"`
-		Body    map[string]interface{} `yaml:"body"`
+		Method     string                 `yaml:"method"`
+		URL        string                 `yaml:"url"`
+		Headers    map[string]string      `yaml:"headers"`
+		Body       map[string]interface{} `yaml:"body,omitempty"`
+		BodyFile   string                 `yaml:"body_file,omitempty"`
+		bodyData   map[string]interface{} // resolved body data
+		bodySource string                 // tracks source for debugging
 	}
 
 	StepExpect struct {
@@ -213,8 +216,22 @@ func (r *Runner) runFile(path string) ([]string, []error) {
 		"base_url": spec.Config.BaseURL,
 	}
 
+	// Resolve body files relative to the YAML file's directory
+	baseDir := filepath.Dir(path)
+
 	var errs []error
 	for _, step := range spec.Workflow {
+		// Resolve body from file if specified
+		if err := r.resolveBodyFile(&step, baseDir); err != nil {
+			errs = append(errs, &StepError{
+				File:        path,
+				Step:        step.Step,
+				Description: step.Description,
+				Err:         fmt.Errorf("resolve body file: %w", err),
+			})
+			continue
+		}
+
 		if err := r.executeStep(step, vars, log); err != nil {
 			errs = append(errs, &StepError{
 				File:        path,
@@ -226,6 +243,39 @@ func (r *Runner) runFile(path string) ([]string, []error) {
 	}
 
 	return logs, errs
+}
+
+func (r *Runner) resolveBodyFile(step *Step, baseDir string) error {
+	// If no body_file specified, use inline body
+	if step.Request.BodyFile == "" {
+		if len(step.Request.Body) > 0 {
+			step.Request.bodyData = step.Request.Body
+			step.Request.bodySource = "inline"
+		}
+		return nil
+	}
+
+	// Resolve the file path relative to the YAML file
+	bodyPath := step.Request.BodyFile
+	if !filepath.IsAbs(bodyPath) {
+		bodyPath = filepath.Join(baseDir, bodyPath)
+	}
+
+	// Read the JSON file
+	data, err := os.ReadFile(bodyPath)
+	if err != nil {
+		return fmt.Errorf("read body file %s: %w", step.Request.BodyFile, err)
+	}
+
+	// Parse the JSON
+	var bodyData map[string]interface{}
+	if err := json.Unmarshal(data, &bodyData); err != nil {
+		return fmt.Errorf("parse body file %s: %w", step.Request.BodyFile, err)
+	}
+
+	step.Request.bodyData = bodyData
+	step.Request.bodySource = step.Request.BodyFile
+	return nil
 }
 
 func (r *Runner) executeStep(step Step, vars map[string]string, log func(string, ...interface{})) error {
@@ -244,13 +294,16 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 	}
 
 	bodyReader := io.Reader(nil)
-	if len(step.Request.Body) > 0 {
-		body := applyVarsToInterface(step.Request.Body, vars)
+	if len(step.Request.bodyData) > 0 {
+		body := applyVarsToInterface(step.Request.bodyData, vars)
 		payload, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("marshal body: %w", err)
 		}
 		bodyReader = bytes.NewReader(payload)
+		if r.verbose && step.Request.bodySource != "" {
+			log("Using body from: %s", step.Request.bodySource)
+		}
 	}
 
 	req, err := http.NewRequest(method, url, bodyReader)

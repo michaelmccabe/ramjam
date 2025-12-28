@@ -1,0 +1,64 @@
+metadata:
+  name: "Body File Feature Demo"
+  author: "ramjam"
+  description: "Demonstrates using external JSON files for request bodies with variable substitution"
+
+config:
+  base_url: "https://jsonplaceholder.typicode.com"
+
+workflow:
+- step: "inline-body-example"
+  description: "Traditional inline body approach"
+  request:
+    method: "POST"
+    url: "${base_url}/posts"
+    body:
+      title: "Inline Post"
+      body: "This uses inline body definition"
+      userId: 1
+  expect:
+    status: 201
+  output:
+    print: "✓ Created post using inline body"
+
+- step: "external-file-body"
+  description: "Load body from external JSON file"
+  request:
+    method: "POST"
+    url: "${base_url}/posts"
+    body_file: "post-body.json"
+  expect:
+    status: 201
+    json_path_match:
+    - path: "title"
+      value: "New Post from JSON File"
+  output:
+    print: "✓ Created post using external JSON file"
+
+- step: "get-user-data"
+  description: "Fetch user data to capture variables"
+  request:
+    method: "GET"
+    url: "${base_url}/users/1"
+  expect:
+    status: 200
+  capture:
+  - json_path: "name"
+    as: "user_name"
+  - json_path: "email"
+    as: "user_email"
+  - json_path: "id"
+    as: "user_id"
+  output:
+    print: "✓ Captured user: ${user_name} (${user_email})"
+
+- step: "put-with-file-and-variables"
+  description: "Use external body file with variable substitution"
+  request:
+    method: "PUT"
+    url: "${base_url}/users/1"
+    body_file: "user-profile.json"
+  expect:
+    status: 200
+  output:
+    print: "✓ Updated user profile using JSON file with variables"

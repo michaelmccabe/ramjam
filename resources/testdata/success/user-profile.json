@@ -1,0 +1,17 @@
+{
+  "name": "Test User",
+  "username": "testuser",
+  "email": "test@example.com",
+  "address": {
+    "street": "123 Main St",
+    "city": "Test City",
+    "zipcode": "12345"
+  },
+  "phone": "555-1234",
+  "website": "testuser.example.com",
+  "company": {
+    "name": "Test Company",
+    "catchPhrase": "Testing is our business",
+    "bs": "deliver quality software"
+  }
+}

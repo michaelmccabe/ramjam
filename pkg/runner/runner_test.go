@@ -402,6 +402,187 @@ workflow:
 	}
 }
 
+func TestBodyFile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		body, _ := io.ReadAll(r.Body)
+		bodyStr := string(body)
+		// Verify the body was loaded from the JSON file
+		if !strings.Contains(bodyStr, `"title":"Test Post"`) {
+			t.Errorf("expected title in body, got: %s", bodyStr)
+		}
+		if !strings.Contains(bodyStr, `"priority":"high"`) {
+			t.Errorf("expected priority in body, got: %s", bodyStr)
+		}
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"id": 123, "title": "Test Post", "priority": "high"}`))
+	}))
+	defer srv.Close()
+
+	// Create temp directory for test files
+	tmpDir, err := os.MkdirTemp("", "ramjam_bodyfile_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create the JSON body file
+	bodyJSON := `{
+  "title": "Test Post",
+  "body": "This is a test post",
+  "userId": 1,
+  "priority": "high"
+}`
+	bodyFilePath := filepath.Join(tmpDir, "test-body.json")
+	if err := os.WriteFile(bodyFilePath, []byte(bodyJSON), 0644); err != nil {
+		t.Fatalf("failed to write body file: %v", err)
+	}
+
+	// Create the YAML test file
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Body File Test"
+config:
+  base_url: "%s"
+workflow:
+- step: "post-with-file"
+  description: "POST with body from external JSON file"
+  request:
+    method: "POST"
+    url: "/posts"
+    body_file: "test-body.json"
+  expect:
+    status: 201
+    json_path_match:
+    - path: "title"
+      value: "Test Post"
+    - path: "priority"
+      value: "high"
+`, srv.URL)
+
+	yamlFilePath := filepath.Join(tmpDir, "test.yaml")
+	if err := os.WriteFile(yamlFilePath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write yaml file: %v", err)
+	}
+
+	// Run the test
+	r := New(10*time.Second, true)
+	if err := r.RunPaths([]string{yamlFilePath}); err != nil {
+		t.Fatalf("RunPaths failed: %v", err)
+	}
+}
+
+func TestBodyFileWithVariables(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		bodyStr := string(body)
+		// Verify variables were substituted in the body loaded from file
+		if !strings.Contains(bodyStr, `"userId":"42"`) {
+			t.Errorf("expected userId to be 42, got: %s", bodyStr)
+		}
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"id": 999}`))
+	}))
+	defer srv.Close()
+
+	tmpDir, err := os.MkdirTemp("", "ramjam_bodyfile_vars_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create JSON file with variable placeholder
+	bodyJSON := `{
+  "userId": "${user_id}",
+  "action": "create"
+}`
+	bodyFilePath := filepath.Join(tmpDir, "body.json")
+	if err := os.WriteFile(bodyFilePath, []byte(bodyJSON), 0644); err != nil {
+		t.Fatalf("failed to write body file: %v", err)
+	}
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Body File Variables Test"
+config:
+  base_url: "%s"
+workflow:
+- step: "capture-id"
+  request:
+    method: "GET"
+    url: "/user"
+  expect:
+    status: 200
+  capture:
+  - json_path: "id"
+    as: "user_id"
+
+- step: "post-with-vars"
+  request:
+    method: "POST"
+    url: "/action"
+    body_file: "body.json"
+  expect:
+    status: 201
+`, srv.URL)
+
+	// Need to handle the capture step
+	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/user" {
+			w.Write([]byte(`{"id": "42"}`))
+			return
+		}
+		if r.URL.Path == "/action" {
+			body, _ := io.ReadAll(r.Body)
+			bodyStr := string(body)
+			if !strings.Contains(bodyStr, `"userId":"42"`) {
+				t.Errorf("expected userId to be 42, got: %s", bodyStr)
+			}
+			w.WriteHeader(http.StatusCreated)
+			w.Write([]byte(`{"id": 999}`))
+			return
+		}
+	}))
+	defer testSrv.Close()
+
+	yamlContent = fmt.Sprintf(`
+metadata:
+  name: "Body File Variables Test"
+config:
+  base_url: "%s"
+workflow:
+- step: "capture-id"
+  request:
+    method: "GET"
+    url: "/user"
+  expect:
+    status: 200
+  capture:
+  - json_path: "id"
+    as: "user_id"
+
+- step: "post-with-vars"
+  request:
+    method: "POST"
+    url: "/action"
+    body_file: "body.json"
+  expect:
+    status: 201
+`, testSrv.URL)
+
+	yamlFilePath := filepath.Join(tmpDir, "test.yaml")
+	if err := os.WriteFile(yamlFilePath, []byte(yamlContent), 0644); err != nil {
+		t.Fatalf("failed to write yaml file: %v", err)
+	}
+
+	r := New(10*time.Second, true)
+	if err := r.RunPaths([]string{yamlFilePath}); err != nil {
+		t.Fatalf("RunPaths failed: %v", err)
+	}
+}
+
 // Helper to run a test from YAML content string
 func runTest(t *testing.T, yamlContent string) {
 	if err := runTestError(t, yamlContent); err != nil {
