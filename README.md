@@ -13,6 +13,7 @@ A  command-line tool for testing HTTP APIs, built with Go and using the Cobra fr
 * Configurable request timeouts
 * Verbose mode for detailed request/response information
 * Easy installation as a local binary
+* Load request bodies from external JSON files via `body_file`
 
 ## Prerequisites
 
@@ -37,7 +38,6 @@ export PATH=$PATH:$(go env GOPATH)/bin
 ```
 
 ### Manual Installation
-
 
 
 
@@ -82,6 +82,8 @@ For full details for how to use, see [How To Use Ramjam](./RAMJAM.md).
 
 For details on integrating with CI/CD pipelines, see [CI/CD Integration](./INTEGRATE.md).
 
+For details on using JSON files for the body of requests see  [body file feature](./BODY_FILE_FEASTURE.md).
+
 ### Basic Commands
 
 Display help and available commands:
@@ -100,6 +102,10 @@ ramjam version
 
 `ramjam` makes HTTP requests by running the workflows defined in the YAML files fed into the tool via the command line.
 
+### Loading Request Bodies from JSON Files
+
+Payloads can be kept in standalone JSON files and referenced with the `body_file` keyword (see [Body File Feature](./BODY_FILE_FEATURE.md)).
+
 ### Running YAML Workflows
 
 Execute one or more workflow files or a directory of workflows:
@@ -114,17 +120,37 @@ ramjam run login.yaml signup.yaml profile.yaml
 You can try this out quickly yourself with the test files included
 
 ```bash
-❯ ramjam run ./resources/testdata                                        
-[simpleGetTests.yaml] Running workflow file: resources/testdata/simpleGetTests.yaml
-[User Cross-Reference Validation] Successfully verified Clementine Bauch lives in McKenziehaven
+❯ ramjam run resources/testdata/success             
+[patchInputTest.yaml] Running workflow file: resources/testdata/success/patchInputTest.yaml
+[postInpuTest.yaml] Running workflow file: resources/testdata/success/postInpuTest.yaml
+[Complex POST Integration] Successfully created post from external JSON file
+[putInputTest.yaml] Running workflow file: resources/testdata/success/putInputTest.yaml
+[bodyFileDemo.yaml] Running workflow file: resources/testdata/success/bodyFileDemo.yaml
+[Body File Feature Demo] ✓ Created post using inline body
+[Body File Feature Demo] ✓ Created post using external JSON file
+[Body File Feature Demo] ✓ Captured user: Leanne Graham (Sincere@april.biz)
+[Body File Feature Demo] ✓ Updated user profile using JSON file with variables
+[simpleGetTests.yaml] Running workflow file: resources/testdata/success/simpleGetTests.yaml
+[User Cross-Reference Validation] Successfully verified Clementine Bauch lives in McKenziehaven with cache max-age 43200
 [User Cross-Reference Validation] The first post title for user 3 is: asperiores ea ipsam voluptatibus modi minima quia sint
-[FailingGetTests.yaml] Running workflow file: resources/testdata/FailingGetTests.yaml
-[patchInputTest.yaml] Running workflow file: resources/testdata/patchInputTest.yaml
-[postInpuTest.yaml] Running workflow file: resources/testdata/postInpuTest.yaml
-[putInputTest.yaml] Running workflow file: resources/testdata/putInputTest.yaml
+All steps were run successfully
+
+
+❯ ramjam run resources/testdata/fail   
+[FailingGetTests.yaml] Running workflow file: resources/testdata/fail/FailingGetTests.yaml
 Failed step: get-specific-user
 Failed step: validate-user-in-list
 Failed step: fetch-user-posts
+Error: workflow failed with 3 errors
+Usage:
+  ramjam run <files-or-folders...> [flags]
+
+Flags:
+  -h, --help   help for run
+
+Global Flags:
+  -v, --verbose   Enable verbose output
+
 Error: workflow failed with 3 errors
 ```
 

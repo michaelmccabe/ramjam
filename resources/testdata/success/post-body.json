@@ -1,0 +1,10 @@
+{
+  "title": "New Post from JSON File",
+  "body": "This is the post content loaded from an external JSON file",
+  "userId": 1,
+  "metadata": {
+    "source": "external-file",
+    "priority": "high",
+    "tags": ["test", "ramjam", "json-file"]
+  }
+}
