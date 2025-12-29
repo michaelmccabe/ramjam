@@ -20,6 +20,12 @@ func TestSimpleGet(t *testing.T) {
 		if r.URL.Path != "/users" {
 			t.Errorf("expected /users, got %s", r.URL.Path)
 		}
+		if r.Header.Get("Accept") != "application/json" {
+			t.Errorf("expected Accept header application/json, got %s", r.Header.Get("Accept"))
+		}
+		if r.Header.Get("X-Ramjam-Test") != "simple-get" {
+			t.Errorf("expected X-Ramjam-Test header simple-get, got %s", r.Header.Get("X-Ramjam-Test"))
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"users": []}`))
 	}))
@@ -35,10 +41,12 @@ workflow:
   request:
     method: "GET"
     url: "/users"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Test: "simple-get"
   expect:
     status: 200
 `, srv.URL)
-
 	runTest(t, yamlContent)
 }
 
@@ -99,8 +107,14 @@ workflow:
 
 func TestJsonPathMatching(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/data" {
+			w.Header().Set("Content-Type", "application/json")
+			if r.Header.Get("Accept") != "application/json" {
+				t.Errorf("expected Accept header application/json for /data, got %s", r.Header.Get("Accept"))
+			}
+			if r.Header.Get("X-Ramjam-Step") != "check-json" {
+				t.Errorf("expected X-Ramjam-Step header check-json for /data, got %s", r.Header.Get("X-Ramjam-Step"))
+			}
 			w.Write([]byte(`{
 				"user": {
 					"name": "Alice",
@@ -111,6 +125,12 @@ func TestJsonPathMatching(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/list" {
+			if r.Header.Get("Accept") != "application/json" {
+				t.Errorf("expected Accept header application/json for /list, got %s", r.Header.Get("Accept"))
+			}
+			if r.Header.Get("X-Ramjam-Step") != "check-filter" {
+				t.Errorf("expected X-Ramjam-Step header check-filter for /list, got %s", r.Header.Get("X-Ramjam-Step"))
+			}
 			w.Write([]byte(`[
 				{"id": 1, "title": "Hello"},
 				{"id": 2, "title": "World"}
@@ -131,6 +151,9 @@ workflow:
   request:
     method: "GET"
     url: "/data"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "check-json"
   expect:
     status: 200
     json_path_match:
@@ -145,6 +168,9 @@ workflow:
   request:
     method: "GET"
     url: "/list"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "check-filter"
   expect:
     status: 200
     json_path_match:
@@ -407,6 +433,12 @@ func TestBodyFile(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
+		if r.Header.Get("Accept") != "application/json" {
+			t.Errorf("expected Accept header application/json for /posts, got %s", r.Header.Get("Accept"))
+		}
+		if r.Header.Get("X-Body-Source") != "file" {
+			t.Errorf("expected X-Body-Source header file, got %s", r.Header.Get("X-Body-Source"))
+		}
 		body, _ := io.ReadAll(r.Body)
 		bodyStr := string(body)
 		// Verify the body was loaded from the JSON file
@@ -452,6 +484,9 @@ workflow:
   request:
     method: "POST"
     url: "/posts"
+    headers:
+      Accept: "application/json"
+      X-Body-Source: "file"
     body_file: "test-body.json"
   expect:
     status: 201

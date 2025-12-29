@@ -12,6 +12,9 @@ workflow:
   request:
     method: "GET"
     url: "${base_url}/users/3"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "get-specific-user"
   expect:
     status: 200
     # Validating a deeply nested value
@@ -29,6 +32,9 @@ workflow:
   request:
     method: "GET"
     url: "${base_url}/users"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "validate-user-in-list"
   expect:
     status: 200
     # Logic: Search the array for the object where id is 3, then check the name
@@ -55,6 +61,9 @@ workflow:
     method: "GET"
     # Using a hardcoded ID for now, but could be captured as ${captured_user_id}
     url: "${base_url}/posts?userId=3"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "fetch-user-posts"
   expect:
     status: 200
     json_path_match:

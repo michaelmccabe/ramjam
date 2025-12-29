@@ -51,6 +51,12 @@ func TestRunCmdHappyPath(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Fatalf("expected GET, got %s", r.Method)
 		}
+		if r.Header.Get("Accept") != "application/json" {
+			t.Fatalf("expected Accept header application/json, got %s", r.Header.Get("Accept"))
+		}
+		if r.Header.Get("X-Run-Test") != "happy-path" {
+			t.Fatalf("expected X-Run-Test header happy-path, got %s", r.Header.Get("X-Run-Test"))
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"message":"ok"}`))
@@ -67,6 +73,9 @@ workflow:
   request:
     method: "GET"
     url: "${base_url}/"
+    headers:
+      Accept: "application/json"
+      X-Run-Test: "happy-path"
   expect:
     status: 200
     json_path_match:

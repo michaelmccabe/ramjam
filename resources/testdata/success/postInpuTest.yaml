@@ -11,6 +11,9 @@ workflow:
   request:
     method: "POST"
     url: "${base_url}/posts"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "create-post-with-payload"
     # This is a YAML object that your CLI converts to JSON
     body:
       title: "New Integration Test"
@@ -35,6 +38,9 @@ workflow:
   request:
     method: "POST"
     url: "${base_url}/posts"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "create-post-from-json-file"
     # Load body from an external JSON file (relative to this YAML file)
     body_file: "post-body.json"
   expect:
