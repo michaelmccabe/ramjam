@@ -10,6 +10,9 @@ workflow:
   request:
     method: "PUT"
     url: "${base_url}/users/1"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "update-user-profile"
     body:
       id: 1
       name: "Leanne Graham"

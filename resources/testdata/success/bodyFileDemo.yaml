@@ -12,6 +12,9 @@ workflow:
   request:
     method: "POST"
     url: "${base_url}/posts"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "inline-body-example"
     body:
       title: "Inline Post"
       body: "This uses inline body definition"
@@ -26,6 +29,9 @@ workflow:
   request:
     method: "POST"
     url: "${base_url}/posts"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "external-file-body"
     body_file: "post-body.json"
   expect:
     status: 201
@@ -40,6 +46,9 @@ workflow:
   request:
     method: "GET"
     url: "${base_url}/users/1"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "get-user-data"
   expect:
     status: 200
   capture:
@@ -57,6 +66,9 @@ workflow:
   request:
     method: "PUT"
     url: "${base_url}/users/1"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "put-with-file-and-variables"
     body_file: "user-profile.json"
   expect:
     status: 200

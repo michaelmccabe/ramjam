@@ -47,6 +47,7 @@ type (
 		Headers    map[string]string      `yaml:"headers"`
 		Body       map[string]interface{} `yaml:"body,omitempty"`
 		BodyFile   string                 `yaml:"body_file,omitempty"`
+		Params     map[string]string      `yaml:"params"`
 		bodyData   map[string]interface{} // resolved body data
 		bodySource string                 // tracks source for debugging
 	}
@@ -288,7 +289,14 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 		method = http.MethodGet
 	}
 
-	url := applyVars(step.Request.URL, vars)
+	requestURL := applyVars(step.Request.URL, vars)
+	if len(step.Request.Params) > 0 {
+		if idx := strings.Index(requestURL, "?"); idx >= 0 {
+			requestURL = requestURL[:idx]
+		}
+	}
+
+	url := requestURL
 	if !strings.HasPrefix(url, "http") && vars["base_url"] != "" {
 		url = strings.TrimSuffix(vars["base_url"], "/") + "/" + strings.TrimPrefix(url, "/")
 	}
@@ -317,6 +325,14 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 
 	for k, v := range step.Request.Headers {
 		req.Header.Set(k, applyVars(v, vars))
+	}
+
+	if len(step.Request.Params) > 0 {
+		query := req.URL.Query()
+		for key, value := range step.Request.Params {
+			query.Set(key, applyVars(value, vars))
+		}
+		req.URL.RawQuery = query.Encode()
 	}
 
 	resp, err := r.client.Do(req)

@@ -10,6 +10,9 @@ workflow:
   request:
     method: "GET"
     url: "${base_url}/posts/2"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "get-reference-title"
   capture:
   - json_path: "title"
     as: "original_title"
@@ -19,6 +22,9 @@ workflow:
   request:
     method: "PATCH"
     url: "${base_url}/posts/1"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "patch-with-captured-data"
     body:
       title: "Copy of: ${original_title}"
       updated: true
