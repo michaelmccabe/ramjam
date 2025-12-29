@@ -1,0 +1,38 @@
+metadata:
+  name: "Query Parameters Demo"
+  author: "ramjam"
+  description: "Demonstrates GET requests that append query params via YAML"
+
+config:
+  base_url: "https://jsonplaceholder.typicode.com"
+
+workflow:
+- step: "user-by-id"
+  description: "Request targets with inline query values"
+  request:
+    method: "GET"
+    url: "/users?id=3"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "user-by-id"
+  expect:
+    status: 200
+    json_path_match:
+    - path: "$[0].id"
+      value: "3"
+
+- step: "posts-by-id"
+  description: "Override inline query with params map"
+  request:
+    method: "GET"
+    url: "/posts?foo=ignore"
+    params:
+      id: "3"
+    headers:
+      Accept: "application/json"
+      X-Ramjam-Step: "posts-by-id"
+  expect:
+    status: 200
+    json_path_match:
+    - path: "$[0].id"
+      value: "3"

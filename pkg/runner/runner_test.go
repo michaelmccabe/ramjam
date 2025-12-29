@@ -181,6 +181,69 @@ workflow:
 	runTest(t, yamlContent)
 }
 
+func TestRequestParams(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users":
+			query := r.URL.Query()
+			if query.Get("foo") != "url" {
+				t.Errorf("expected foo=url, got %s", query.Get("foo"))
+			}
+			if len(query) != 1 {
+				t.Errorf("unexpected queries: %v", query)
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		case "/posts":
+			query := r.URL.Query()
+			if query.Get("id") != "3" {
+				t.Errorf("expected id=3, got %s", query.Get("id"))
+			}
+			if query.Get("type") != "review" {
+				t.Errorf("expected type=review, got %s", query.Get("type"))
+			}
+			if query.Get("foo") != "" {
+				t.Errorf("expected foo param to be stripped, got %s", query.Get("foo"))
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Request Params"
+config:
+  base_url: "%s"
+workflow:
+- step: "inline-query"
+  request:
+    method: "GET"
+    url: "/users?foo=url"
+    headers:
+      Accept: "application/json"
+  expect:
+    status: 200
+
+- step: "params-map"
+  request:
+    method: "GET"
+    url: "/posts?foo=ignore"
+    params:
+      id: "3"
+      type: "review"
+    headers:
+      Accept: "application/json"
+  expect:
+    status: 200
+`, srv.URL)
+
+	runTest(t, yamlContent)
+}
+
 func TestExpectHeaders(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
