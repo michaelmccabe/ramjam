@@ -1,4 +1,4 @@
-# ramjam
+# 🗨️ ramjam
 
 A  command-line tool for testing HTTP APIs, built with Go and using the Cobra framework.
 
