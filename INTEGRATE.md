@@ -2,25 +2,103 @@
 
 Ramjam is designed to be a lightweight, standalone binary that is perfect for running End-to-End (E2E) API tests in Continuous Integration (CI) environments like GitHub Actions, GitLab CI, or Jenkins.
 
-
 This guide details how to set up Ramjam as a quality gate in your deployment pipeline.
 
 ## Integration Strategy
 
-To use Ramjam effectively in a CI pipeline, your workflow typically looks something like the following;
+To use Ramjam effectively in a CI pipeline, your workflow typically looks something like the following:
 
+1. **Build & Start** your application (the System Under Test)
+2. **Wait** for the application to be healthy/ready
+3. **Install** Ramjam from GitHub releases
+4. **Run** Ramjam workflows against the running application
 
-* **Build & Start** your application (the System Under Test).
-* **Wait** for the application to be healthy/ready.
-* **Install** Ramjam.
-* **Run** Ramjam workflows against the running application.
+## Installing Ramjam in CI
 
-## GitHub Actions Example
+The recommended way to install Ramjam in CI is to download the pre-built binary from GitHub releases:
 
-Below is a complete example of a GitHub Actions workflow that spins up a Go application and runs Ramjam tests against it.
+```bash
+curl -L -o ramjam https://github.com/michaelmccabe/ramjam/releases/download/v1.0.0-beta.1/ramjam-linux-amd64
+chmod +x ramjam
+sudo mv ramjam /usr/local/bin/
+```
 
+This is faster and more reliable than building from source, and doesn't require Go to be installed.
 
-Create this file at `.github/workflows/e2e-tests.yaml`
+## Real-World Example: jimjam
+
+The [jimjam](https://github.com/michaelmccabe/jimjam) project uses Ramjam for integration testing. Here's their actual workflow:
+
+**File:** `.github/workflows/integration-tests.yml`
+
+```yaml
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build jimjam
+        run: cargo build --release
+
+      - name: Install ramjam
+        run: |
+          curl -L -o ramjam https://github.com/michaelmccabe/ramjam/releases/download/v1.0.0-beta.1/ramjam-linux-amd64
+          chmod +x ramjam
+          sudo mv ramjam /usr/local/bin/
+
+      - name: Start jimjam server
+        run: |
+          ./target/release/jimjam-http &
+          echo "Waiting for server to start..."
+          sleep 3
+          # Verify server is running
+          curl --retry 5 --retry-delay 1 --retry-connrefused http://127.0.0.1:8080/api/health
+
+      - name: Run ramjam integration tests
+        run: ramjam run ramjam-test/
+
+      - name: Stop jimjam server
+        if: always()
+        run: pkill jimjam-http || true
+```
+
+### Key Patterns from jimjam
+
+1. **Download pre-built binary** - No need to install Go or build from source
+2. **Health check with retries** - Uses `curl --retry` to wait for the server
+3. **Test directory structure** - All Ramjam YAML files live in `ramjam-test/`
+4. **Cleanup step** - Uses `if: always()` to ensure server is stopped even on failure
+
+## GitHub Actions Example (Go Application)
+
+Here's a complete example for a Go application with database dependencies:
 
 ```yaml
 name: End-to-End API Tests
@@ -51,17 +129,14 @@ jobs:
           --health-retries 5
 
     steps:
-      # 1. Checkout your code
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      # 2. Set up language environment
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
 
-      # 3. Build and Start your API in the background
-      - name: Start API Server
+      - name: Build and Start API Server
         run: |
           go build -o app ./cmd/server
           ./app &
@@ -72,32 +147,22 @@ jobs:
           DB_USER: postgres
           DB_PASSWORD: password
 
-      # 4. Wait for API to be ready (Healthcheck)
       - name: Wait for API
         run: |
-          timeout 30s bash -c 'until curl -s http://localhost:8080/health; do sleep 1; done'
+          curl --retry 10 --retry-delay 2 --retry-connrefused http://localhost:8080/health
 
-      # 5. Install Ramjam
       - name: Install Ramjam
         run: |
-          git clone https://github.com/michaelmccabe/ramjam.git /tmp/ramjam
-          cd /tmp/ramjam && make install
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          curl -L -o ramjam https://github.com/michaelmccabe/ramjam/releases/latest/download/ramjam-linux-amd64
+          chmod +x ramjam
+          sudo mv ramjam /usr/local/bin/
 
-      # 6. Run E2E Tests
-      - name: Run Ramjam workflows
-        run: |
-          ramjam run ./tests/e2e/ --verbose
-        env:
-          # Ensure your YAML files use ${base_url} so this works dynamically
-          BASE_URL: http://localhost:8080 
+      - name: Run E2E Tests
+        run: ramjam run ./tests/e2e/ --verbose
 
-      # 7. (Optional) Notify on Failure
-      - name: Notify on Failure
-        if: failure()
-        run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-          -d '{"text":"E2E Tests Failed for commit ${{ github.sha }}"}'
+      - name: Stop API Server
+        if: always()
+        run: kill $PID || true
 ```
 
 ## Best Practices

@@ -6,6 +6,18 @@ A  command-line tool for testing HTTP APIs, built with Go and using the Cobra fr
 
 `ramjam` is a CLI tool designed to simplify HTTP API testing and interaction. It provides an intuitive interface for making HTTP requests, inspecting responses, and validating API behavior directly from your terminal.
 
+## Latest Releases
+
+The latest binary releases for `ramjam` can be found [here](https://github.com/michaelmcc)
+
+## Documentation
+
+| Document | Description |
+|----|----|
+| [How To Use Ramjam](./RAMJAM.md) | Complete workflow DSL reference, variable substitution, authentication patterns, and full examples |
+| [CI/CD Integration](./INTEGRATE.md) | Guide for integrating ramjam into GitHub Actions, GitLab CI, and other CI/CD pipelines |
+| [Body File Feature](./BODY_FILE_FEATURE.md) | Using external JSON files for request bodies |
+
 ## Features
 
 * Simple and intuitive command-line interface
@@ -250,40 +262,43 @@ Releases are automated via GitHub Actions. When you push a version tag, the work
 
 ### Creating a New Release
 
-1. **Update version** (optional): Edit the default version in `cmd/ramjam/cmd/root.go` if desired
 
+
+1. **Update version** (optional): Edit the default version in `cmd/ramjam/cmd/root.go` if desired
 2. **Commit your changes**:
+
    ```bash
    git add .
    git commit -m "Prepare release v1.0.0"
    ```
-
 3. **Create and push a version tag**:
+
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
-
 4. The GitHub Actions workflow will automatically:
-   - Run all tests
-   - Build binaries for Linux, macOS, and Windows (both AMD64 and ARM64)
-   - Generate SHA256 checksums
-   - Create a GitHub release with all binaries attached
+   * Run all tests
+   * Build binaries for Linux, macOS, and Windows (both AMD64 and ARM64)
+   * Generate SHA256 checksums
+   * Create a GitHub release with all binaries attached
 
 ### Release Assets
 
 Each release includes:
-- `ramjam-linux-amd64` - Linux (Intel/AMD)
-- `ramjam-linux-arm64` - Linux (ARM)
-- `ramjam-darwin-amd64` - macOS (Intel)
-- `ramjam-darwin-arm64` - macOS (Apple Silicon)
-- `ramjam-windows-amd64.exe` - Windows (Intel/AMD)
-- `ramjam-windows-arm64.exe` - Windows (ARM)
-- `checksums.txt` - SHA256 checksums for verification
+
+* `ramjam-linux-amd64` - Linux (Intel/AMD)
+* `ramjam-linux-arm64` - Linux (ARM)
+* `ramjam-darwin-amd64` - macOS (Intel)
+* `ramjam-darwin-arm64` - macOS (Apple Silicon)
+* `ramjam-windows-amd64.exe` - Windows (Intel/AMD)
+* `ramjam-windows-arm64.exe` - Windows (ARM)
+* `checksums.txt` - SHA256 checksums for verification
 
 ### Pre-release Versions
 
 Tags containing `-alpha`, `-beta`, or `-rc` are automatically marked as pre-releases:
+
 ```bash
 git tag v1.0.0-beta.1
 git push origin v1.0.0-beta.1
@@ -292,11 +307,13 @@ git push origin v1.0.0-beta.1
 ### Version Information
 
 The version displayed by `ramjam version` is determined at build time:
-- **Release builds**: Version comes from the git tag (e.g., `v1.0.0`)
-- **Local builds via Make**: Version comes from `git describe` (e.g., `v1.0.0-5-g2a3b4c5`)
-- **Direct `go build`**: Uses the default value in `root.go`
+
+* **Release builds**: Version comes from the git tag (e.g., `v1.0.0`)
+* **Local builds via Make**: Version comes from `git describe` (e.g., `v1.0.0-5-g2a3b4c5`)
+* **Direct** `go build`: Uses the default value in `root.go`
 
 To build locally with a specific version:
+
 ```bash
 VERSION=1.0.0 make build
 ```
