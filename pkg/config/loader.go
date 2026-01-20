@@ -1,10 +1,10 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
+	e "github.com/michaelmccabe/ramjam/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,8 +29,8 @@ func (l *Loader) Load(filename string, target interface{}) error {
 // LoadFile reads a YAML file from the given path and unmarshals it into the target
 func LoadFile(path string, target interface{}) error {
 	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to read file %s: %w", path, err)
+	if err := e.Wrapf(err, "failed to read file %s", path); err != nil {
+		return err
 	}
 
 	return Parse(data, target)
@@ -38,10 +38,7 @@ func LoadFile(path string, target interface{}) error {
 
 // Parse parses YAML data and unmarshals it into the target
 func Parse(data []byte, target interface{}) error {
-	if err := yaml.Unmarshal(data, target); err != nil {
-		return fmt.Errorf("failed to parse YAML: %w", err)
-	}
-	return nil
+	return e.Wrap(yaml.Unmarshal(data, target), "failed to parse YAML")
 }
 
 // LoadBytes is a convenience function to load YAML from embedded bytes
