@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build binaries
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          LDFLAGS="-X github.com/michaelmccabe/ramjam/cmd/ramjam/cmd.Version=${VERSION}"
+          
+          # Create output directory
+          mkdir -p dist
+          
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ramjam-linux-amd64 ./cmd/ramjam
+          
+          # Linux ARM64
+          GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/ramjam-linux-arm64 ./cmd/ramjam
+          
+          # macOS AMD64 (Intel)
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ramjam-darwin-amd64 ./cmd/ramjam
+          
+          # macOS ARM64 (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/ramjam-darwin-arm64 ./cmd/ramjam
+          
+          # Windows AMD64
+          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/ramjam-windows-amd64.exe ./cmd/ramjam
+          
+          # Windows ARM64
+          GOOS=windows GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/ramjam-windows-arm64.exe ./cmd/ramjam
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ramjam-linux-amd64
+            dist/ramjam-linux-arm64
+            dist/ramjam-darwin-amd64
+            dist/ramjam-darwin-arm64
+            dist/ramjam-windows-amd64.exe
+            dist/ramjam-windows-arm64.exe
+            dist/checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

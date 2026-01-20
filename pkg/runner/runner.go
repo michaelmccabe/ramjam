@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	e "github.com/michaelmccabe/ramjam/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 
@@ -166,16 +167,16 @@ func (r *Runner) RunPaths(paths []string) error {
 
 func (r *Runner) collectFiles(path string) ([]string, error) {
 	info, err := os.Stat(path)
-	if err != nil {
-		return nil, fmt.Errorf("unable to access %s: %w", path, err)
+	if err := e.Wrapf(err, "unable to access %s", path); err != nil {
+		return nil, err
 	}
 	if !info.IsDir() {
 		return []string{path}, nil
 	}
 
 	entries, err := os.ReadDir(path)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read dir %s: %w", path, err)
+	if err := e.Wrapf(err, "unable to read dir %s", path); err != nil {
+		return nil, err
 	}
 	var files []string
 	for _, e := range entries {
@@ -201,12 +202,12 @@ func (r *Runner) runFile(path string) ([]string, []error) {
 	log("Running workflow file: %s", path)
 
 	data, err := os.ReadFile(path)
-	if err != nil {
-		return logs, []error{fmt.Errorf("read %s: %w", path, err)}
+	if err := e.Wrapf(err, "read %s", path); err != nil {
+		return logs, []error{err}
 	}
 	var spec InstructionsFile
-	if err := yaml.Unmarshal(data, &spec); err != nil {
-		return logs, []error{fmt.Errorf("parse %s: %w", path, err)}
+	if err := e.Wrapf(yaml.Unmarshal(data, &spec), "parse %s", path); err != nil {
+		return logs, []error{err}
 	}
 
 	if spec.Metadata.Name != "" {
@@ -264,14 +265,14 @@ func (r *Runner) resolveBodyFile(step *Step, baseDir string) error {
 
 	// Read the JSON file
 	data, err := os.ReadFile(bodyPath)
-	if err != nil {
-		return fmt.Errorf("read body file %s: %w", step.Request.BodyFile, err)
+	if err := e.Wrapf(err, "read body file %s", step.Request.BodyFile); err != nil {
+		return err
 	}
 
 	// Parse the JSON
 	var bodyData map[string]interface{}
-	if err := json.Unmarshal(data, &bodyData); err != nil {
-		return fmt.Errorf("parse body file %s: %w", step.Request.BodyFile, err)
+	if err := e.Wrapf(json.Unmarshal(data, &bodyData), "parse body file %s", step.Request.BodyFile); err != nil {
+		return err
 	}
 
 	step.Request.bodyData = bodyData
@@ -305,8 +306,8 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 	if len(step.Request.bodyData) > 0 {
 		body := applyVarsToInterface(step.Request.bodyData, vars)
 		payload, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("marshal body: %w", err)
+		if err := e.Wrap(err, "marshal body"); err != nil {
+			return err
 		}
 		bodyReader = bytes.NewReader(payload)
 		if r.verbose && step.Request.bodySource != "" {
@@ -315,8 +316,8 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 	}
 
 	req, err := http.NewRequest(method, url, bodyReader)
-	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+	if err := e.Wrap(err, "build request"); err != nil {
+		return err
 	}
 	req.Header.Set("User-Agent", "ramjam-cli")
 	if bodyReader != nil {
@@ -336,8 +337,8 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 	}
 
 	resp, err := r.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("request: %w", err)
+	if err := e.Wrap(err, "request"); err != nil {
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -379,21 +380,21 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 	}
 
 	rawBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read body: %w", err)
+	if err := e.Wrap(err, "read body"); err != nil {
+		return err
 	}
 
 	var jsonObj interface{}
 	if len(rawBody) > 0 {
-		if err := json.Unmarshal(rawBody, &jsonObj); err != nil {
-			return fmt.Errorf("parse response json: %w", err)
+		if err := e.Wrap(json.Unmarshal(rawBody, &jsonObj), "parse response json"); err != nil {
+			return err
 		}
 	}
 
 	for _, matcher := range step.Expect.JSONPathMatch {
 		actual, err := evalJSONPath(jsonObj, matcher.Path)
-		if err != nil {
-			return fmt.Errorf("jsonpath %s: %w", matcher.Path, err)
+		if err := e.Wrapf(err, "jsonpath %s", matcher.Path); err != nil {
+			return err
 		}
 		expected := applyVars(fmt.Sprint(matcher.Value), vars)
 		if r.verbose {
@@ -410,15 +411,15 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 
 		if cap.JSONPath != "" {
 			val, err = evalJSONPath(jsonObj, cap.JSONPath)
-			if err != nil {
-				return fmt.Errorf("capture json_path %s: %w", cap.JSONPath, err)
+			if err := e.Wrapf(err, "capture json_path %s", cap.JSONPath); err != nil {
+				return err
 			}
 		} else if cap.Header != "" {
 			headerVal := resp.Header.Get(cap.Header)
 			if cap.Regex != "" {
 				re, err := regexp.Compile(cap.Regex)
-				if err != nil {
-					return fmt.Errorf("invalid regex %s: %w", cap.Regex, err)
+				if err := e.Wrapf(err, "invalid regex %s", cap.Regex); err != nil {
+					return err
 				}
 				matches := re.FindStringSubmatch(headerVal)
 				if len(matches) > 1 {
