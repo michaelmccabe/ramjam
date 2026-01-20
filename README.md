@@ -8,7 +8,7 @@ A  command-line tool for testing HTTP APIs, built with Go and using the Cobra fr
 
 ## Latest Releases
 
-The latest binary releases for `ramjam` can be found [here](https://github.com/michaelmcc)
+The latest binary releases for `ramjam` can be found [here]( https://github.com/michaelmccabe/ramjam/releases)
 
 ## Documentation
 
