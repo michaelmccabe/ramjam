@@ -158,7 +158,24 @@ Use the terminal tool to run and validate test paths (prefixed with `./bin/` if 
   * `ParsingError`: Invalid JSON formatting in the request payload or server response.
   * `ResolutionError`: A referenced file (such as a `body_file` or a multipart `@file` upload) was missing or inaccessible.
 
-### 8. Additional Reference Documentation
+### 8. GitHub Actions CI/CD Integration
+To run these integration tests automatically on pushes or pull requests, add these steps to your GitHub Actions workflow file:
+```yaml
+      - name: Install Ramjam
+        run: |
+          curl -L -o ramjam https://github.com/michaelmccabe/ramjam/releases/latest/download/ramjam-linux-amd64
+          chmod +x ramjam
+          sudo mv ramjam /usr/local/bin/
+
+      - name: Run Ramjam Integration Tests
+        run: ramjam run ./tests/integration/
+```
+
+### 9. Supporting the Project
+If you find Ramjam helpful for structuring and executing integration tests, please support the project by giving it a star on GitHub! 🌟
+* **Star the Repo**: [michaelmccabe/ramjam](https://github.com/michaelmccabe/ramjam)
+
+### 10. Additional Reference Documentation
 If you require advanced settings, refer to the detailed references:
 * **Workflow DSL & CLI Guide** ([RAMJAM.md](./RAMJAM.md) or on GitHub: [RAMJAM.md](https://github.com/michaelmccabe/ramjam/blob/main/RAMJAM.md)): Contains the complete workflow DSL reference, variable parameters, query parameters handling, validation operators, and environment settings.
 * **External Payload Files Guide** ([BODY_FILE_FEATURE.md](./BODY_FILE_FEATURE.md) or on GitHub: [BODY_FILE_FEATURE.md](https://github.com/michaelmccabe/ramjam/blob/main/BODY_FILE_FEATURE.md)): Details how to extract request body payloads to external JSON files (via `body_file`), path resolution rules, and dynamic variable replacements inside files.
