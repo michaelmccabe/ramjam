@@ -181,7 +181,11 @@ config:
 
 **In CI**
 
-`ramjam` doesn't currently support overriding config via CLI flags directly, but you can structure your tests to rely on environment variables if you implement a pre-processing step or ensure your CI environment matches the config default.
+You can override the base URL (or any other config variable) at runtime using the `--var` flag:
+
+```bash
+ramjam run ./tests/e2e/ --var base_url=https://staging.api.example.com --verbose
+```
 
 ### Database State
 

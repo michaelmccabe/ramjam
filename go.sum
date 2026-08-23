@@ -1,3 +1,5 @@
+github.com/AsaiYusuke/jsonpath/v2 v2.2.0 h1:yqq/5C26jeA++3yngSSO0w+V5uNenb02/4jYrdAZ+fg=
+github.com/AsaiYusuke/jsonpath/v2 v2.2.0/go.mod h1:Y98U0Usrwioq+aU013GEOt7SEbxE6vtNuschYqQu4Yc=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=

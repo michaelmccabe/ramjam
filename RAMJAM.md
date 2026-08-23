@@ -18,6 +18,9 @@ ramjam run login.yaml create-post.yaml
 
 # Enable verbose output
 ramjam run my-workflow.yaml --verbose
+
+# Override variables at runtime (e.g. override base_url and custom variables)
+ramjam run my-workflow.yaml --var base_url=http://staging.api.com --var user_id=42
 ```
 
 ## Workflow DSL Reference
@@ -56,10 +59,26 @@ The `request` block defines the HTTP request to be made.
 request:
   method: "POST" # GET, POST, PUT, DELETE, PATCH, etc.
   url: "${base_url}/users" # Supports variable substitution
-  body: # Optional JSON body
+  content_type: "application/json" # Optional (defaults to application/json). Supports application/x-www-form-urlencoded and multipart/form-data.
+  body: # Optional request payload
     name: "John Doe"
     job: "Developer"
 ```
+
+#### Request Encodings & Payload Types
+- **JSON (Default)**: Use `content_type: "application/json"` (or leave blank). The `body` map is serialized as JSON.
+- **Form URL-Encoded**: Use `content_type: "application/x-www-form-urlencoded"`. The `body` map keys/values are serialized as standard query form parameters.
+- **Multipart Form-Data**: Use `content_type: "multipart/form-data"`. The `body` keys are written as form parts.
+  - **File Uploads**: To upload a file in a multipart form request, prefix the value of a field with `@` followed by the path (relative to the workflow YAML file or absolute). For example:
+    ```yaml
+    request:
+      method: "POST"
+      url: "${base_url}/upload"
+      content_type: "multipart/form-data"
+      body:
+        description: "User profile picture"
+        avatar: "@/path/to/profile.png"
+    ```
 
 ### Response Validation (`expect`)
 
@@ -70,10 +89,19 @@ expect:
   status: 201 # Expected HTTP status code
   json_path_match: # List of JSONPath assertions
     - path: "name"
+      operator: "eq" # Optional operator: eq, ne, gt, gte, lt, lte, contains
       value: "John Doe"
     - path: "id"
-      value: 123
+      value: 123 # Operator defaults to "eq" if omitted
 ```
+
+#### Comparison Operators for JSONPath Matches
+You can specify the `operator` field to run checks beyond simple equality:
+* `eq` (Default): Checks if actual value equals the expected value.
+* `ne`: Checks if actual value is not equal to the expected value.
+* `gt` / `gte`: Checks if actual value is greater than (or equal to) the expected value. (Converts values to floats for comparison if numeric, otherwise falls back to string comparison).
+* `lt` / `lte`: Checks if actual value is less than (or equal to) the expected value.
+* `contains`: Checks if a string contains a substring, or if a JSON array contains the specified element.
 
 ### Capturing Variables (`capture`)
 
@@ -106,6 +134,7 @@ Variables can be used in `url`, `body`, and `output` fields using the `${variabl
 
 * `${base_url}` is available if defined in `config`.
 * Variables captured in previous steps are available by their `as` name.
+* **CLI Overrides**: You can pass runtime variable values using the `--var` flag (e.g. `--var key=value`). These will take precedence over workflow configuration defaults (like `base_url`).
 
 ## Authentication Example
 
@@ -192,6 +221,34 @@ workflow:
           value: ${new_user_id} # Validates against the captured variable
 ```
 
+
+## Global Configuration Defaults
+
+You can configure global defaults for all workflows in your local environment. Ramjam automatically checks for configuration files named `.ramjam.yaml` or `.ramjam.yml` in the following locations (with local workspace files taking precedence):
+1. The current working directory (e.g. `./.ramjam.yaml`)
+2. The user's home directory (e.g. `~/.ramjam.yaml`)
+
+### Global Config Options
+```yaml
+defaults:
+  base_url: "https://api.staging.example.com"
+  timeout: "15s" # Supports duration strings (s, ms, m, h)
+  headers:
+    Authorization: "Bearer default_token_value"
+    Accept: "application/json"
+```
+
+---
+
+## Error Categories
+
+When a workflow fails, the runner classifies the failure into one of several distinct error categories to make debugging easier:
+* **Validation Error (`ValidationError`)**: Returned when status code check fails, request headers are missing, or a JSONPath assertion fails.
+* **Network Error (`NetworkError`)**: Returned when the HTTP client is unable to establish a connection, resolves a bad hostname, or times out.
+* **Parsing Error (`ParsingError`)**: Returned when a local request body payload cannot be parsed as JSON, or the server response is not in valid JSON format.
+* **Resolution Error (`ResolutionError`)**: Returned when external resource files (like a referenced `body_file` or a multipart file upload) are missing or inaccessible.
+
+---
 
 ## Integrating ramjam into your development workflow
 

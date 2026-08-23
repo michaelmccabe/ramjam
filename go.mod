@@ -3,6 +3,7 @@ module github.com/michaelmccabe/ramjam
 go 1.25
 
 require (
+	github.com/AsaiYusuke/jsonpath/v2 v2.2.0
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
 )
