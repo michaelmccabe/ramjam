@@ -1,50 +1,67 @@
-# 🤖 Ramjam for AI Coding Agents & LLM Workflows
+# 🤖 Ramjam Agentic Testing Guide
 
-Ramjam is an **Agentic-Native API Testing Engine**. While humans love using Ramjam for its simplicity, **AI coding agents (like Gemini, Cursor, and Copilot) find it significantly more reliable than writing traditional script-based test code.**
+## 🏗️ Section 1: Prompt Template for System Instructions
 
-If you are instructing an AI agent to build and test API integration pipelines, this guide explains why Ramjam is the most robust tool for the job.
-
----
-
-## 🎯 Why Instruct Your Agent to Use Ramjam?
-
-When agents write integration tests using Cypress, Playwright, Jest, or pytest, they frequently break due to:
-* ❌ Compilation & syntax errors (TypeScript configs, module loaders).
-* ❌ Mocking and timing issues (async/await ordering).
-* ❌ Setup/Teardown bloat (configuring `node_modules` or Python virtualenvs).
-
-**Ramjam solves this by providing a declarative YAML interface:**
-
-| Feature | Imperative Scripts (JS/Python) | Declarative Ramjam YAML |
-|---|---|---|
-| **Syntax Reliability** | Low (many ways to fail compilation) | High (validated against schema) |
-| **State Propagation** | Verbose (manual global variables) | Native (via `capture` directives) |
-| **Execution Cost** | Slow (node/python startup delay) | Instant (Go single binary) |
-| **Error Feedback** | Traceback soup (hard for LLMs to parse) | Structured (`slog` key-values) |
-
----
-
-## 🏗️ Prompt Template: Instructing Your Agent to Write Tests
-
-Copy and paste this snippet into your system prompt or instruction context to tell your AI agent how to test your endpoints:
+Copy and paste this snippet into your system prompt or instruction context to direct visiting AI agents to use Ramjam:
 
 ```toml
 [testing_instructions]
 We use `ramjam` for API integration testing. Do NOT write JavaScript, Python, or bash-curl scripts for tests.
-Instead, write declarative YAML workflows in the `tests/integration/` folder.
-Structure:
-1. Define a list of steps under the `workflow` block.
-2. For steps needing auth or dynamic references, use the `capture` directive with JSONPath (`as: "variable_name"`).
-3. Verify results using the `expect` block with validation operators (`eq`, `ne`, `contains`, `gte`, etc.).
-4. Run validation using the shell tool: `ramjam run tests/integration/`
+Instead, read the comprehensive guidelines in the Agent Testing Guide ([AGENT_README.md](https://github.com/michaelmccabe/ramjam/blob/main/AGENT_README.md) or the local [AGENT_README.md](./AGENT_README.md) file at the root of the repository) to learn how to write declarative YAML workflows in the `tests/integration/` folder, run the tests, and validate the results.
 ```
 
 ---
 
-## 🛠️ Typical Agent-Generated Workflow
+## 🤖 Section 2: Instructions for AI Coding Agents
 
-Coding agents can easily generate multi-step authenticated flows without risking syntax execution failures:
+You are an AI coding agent tasked with building, modifying, or testing API endpoints in this repository. Follow these strict guidelines to write, execute, and validate integration tests using Ramjam:
 
+### 1. Test Location & File Format
+* Write all test workflows as declarative YAML files.
+* Save all test files in the `tests/integration/` directory (e.g., `tests/integration/user_lifecycle.yaml`).
+* For large request payloads, save them as external JSON files in `tests/integration/payloads/` and reference them.
+
+### 2. Workflow Document Schema
+Each test file must adhere to the following schema:
+* **`metadata`**: Describes the test suite.
+  ```yaml
+  metadata:
+    name: "Unique Workflow Name"
+    description: "Brief summary of what is tested"
+  ```
+* **`config`**: General suite parameters.
+  ```yaml
+  config:
+    base_url: "http://localhost:8080" # Default URL for local testing
+  ```
+* **`workflow`**: A sequential list of steps.
+
+### 3. Step Schema & Capabilities
+Each step within the `workflow` list must contain:
+* **`step`**: A unique string identifier (e.g. `authenticate`, `create-user`).
+* **`description`**: A short explanation of the step.
+* **`request`**: Defines the HTTP call to make:
+  * `method`: HTTP verb (e.g. GET, POST, PUT, DELETE, PATCH).
+  * `url`: Endpoint path (e.g. `/users/${new_user_id}`). Supports `${variable}` substitution.
+  * `headers`: Map of request headers (e.g. `Authorization: "Bearer ${jwt_token}"`).
+  * `params`: Map of query parameters.
+  * `content_type`: Optional. Defaults to `application/json`. Supports `application/x-www-form-urlencoded` and `multipart/form-data`.
+  * `body`: Request payload map (serialized as JSON or form data).
+  * `body_file`: Path to an external JSON file containing the request body (path resolved relative to the test YAML file). Use this to keep YAML files clean.
+  * **File Uploads**: To upload files in `multipart/form-data`, prefix the value of a field in `body` with `@` followed by the file path (e.g., `avatar: "@/path/to/profile.png"`).
+* **`expect`**: Assertions to evaluate on the response:
+  * `status`: Expected HTTP status code integer (e.g. 200, 201).
+  * `headers`: Assertions on response headers (using `name`, and `value` or `contains`).
+  * `json_path_match`: List of JSONPath query checks. Each item contains a `path`, expected `value`, and an optional `operator` (defaults to `eq`).
+    * Supported operators: `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`.
+* **`capture`**: Extracts values from the response to save as variables for subsequent steps:
+  * `json_path`: JSONPath query to extract value from the body.
+  * `header`: Name of the response header to extract.
+  * `regex`: Regular expression pattern to match against the body.
+  * `as`: Name of the variable to store the value in (referenced as `${name}`).
+* **`output`**: Prints messages to the console using `print` (supports `${variable}` substitution).
+
+### 4. Typical E2E Workflow Example
 ```yaml
 metadata:
   name: "Agent Auth & Post lifecycle"
@@ -98,14 +115,23 @@ workflow:
           value: "draft"
 ```
 
----
+### 5. Running and Executing Tests
+Use the terminal tool to run and validate test paths:
+* **Run a directory of tests**: `ramjam run ./tests/integration/`
+* **Run a single test file**: `ramjam run lifecycle.yaml`
+* **Override variables at runtime**: Use `--var` to set or override defaults (e.g., `--var base_url=https://api.staging.example.com`).
+* **Enable verbose logging**: Use `--verbose` or `-v` flags.
 
-## 📊 LLM-Friendly Structured Feedback Loop
-
-Ramjam outputs structured logs via `slog` directly to the terminal when verbose mode is enabled. If a test fails, the agent is presented with structured error logs rather than an unreadable call stack:
-
-```json
-{"time":"2026-08-23T11:00:00Z","level":"ERROR","msg":"validation failed","step":"validate-post","err":"jsonpath status expected 'draft', got 'published'"}
-```
-
-This lets LLM agents immediately parse the exact step that failed, the jsonpath that was evaluated, the expected value, and the actual received value, enabling **unsupervised self-healing test repair**.
+### 6. Test Validation & Self-Healing Loop
+* **Exiting**: The CLI exits with code `0` on success. It exits with a non-zero code if any step fails.
+* **Structured Logs**: Results are outputted to stdout/stderr using Go's standard `slog` library as structured JSON or key-value pairs (easy for you to parse).
+* **Self-Healing Diagnostics**: If a test fails under verbose mode, the engine outputs structured slog errors:
+  ```json
+  {"time":"2026-08-23T11:00:00Z","level":"ERROR","msg":"validation failed","step":"validate-post","err":"jsonpath status expected 'draft', got 'published'"}
+  ```
+  Identify the failing step, the validation that failed, and the actual value from the logs. Use this structured feedback to fix the endpoint implementation or adjust the test assertions without manual intervention.
+* **Error Categories**:
+  * `ValidationError`: An assertion in the `expect` block failed (status, header, or JSONPath check).
+  * `NetworkError`: The connection timed out, DNS lookup failed, or connection was refused.
+  * `ParsingError`: Invalid JSON formatting in the request payload or server response.
+  * `ResolutionError`: A referenced file (such as a `body_file` or a multipart `@file` upload) was missing or inaccessible.

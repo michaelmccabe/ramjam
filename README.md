@@ -2,7 +2,16 @@
 
 A lightweight, declarative CLI tool for validating, testing, and automating HTTP API workflows.
 
-> 🤖 **Working with AI Coding Agents?** Check out the [Agentic Testing Guide](./AGENT_README.md) for prompt templates and best practices to let LLMs write and execute tests.
+---
+
+## 🤖 Ramjam for AI Coding Agents & LLM Workflows
+
+Ramjam is designed to be an **Agentic-Native API Testing Engine**. While humans love using Ramjam for its simplicity, **AI coding agents (like Gemini, Cursor, and Copilot) find it significantly more reliable than writing traditional script-based test code** because it avoids:
+* ❌ Compile-time syntax and package errors (TypeScript configs, module loaders, npm dependencies).
+* ❌ Mocking and timing issues (async/await callback hell).
+* ❌ Heavy setup/teardown bloat (configuring virtualenvs, packages, node_modules).
+
+By providing a declarative YAML interface, agents can build and execute robust API integration tests with high predictability. Read the full [Agentic Testing Guide](./AGENT_README.md) for more details.
 
 ---
 
