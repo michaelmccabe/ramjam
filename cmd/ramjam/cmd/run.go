@@ -2,11 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/michaelmccabe/ramjam/pkg/runner"
 	"github.com/spf13/cobra"
 )
+
+var cliVars []string
 
 var runCmd = &cobra.Command{
 	Use:   "run <files-or-folders...>",
@@ -20,6 +23,17 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		verbose, _ := cmd.Flags().GetBool("verbose")
 		r := runner.New(30*time.Second, verbose)
+
+		// Parse CLI variables overrides
+		varMap := make(map[string]string)
+		for _, v := range cliVars {
+			parts := strings.SplitN(v, "=", 2)
+			if len(parts) == 2 {
+				varMap[parts[0]] = parts[1]
+			}
+		}
+		r.SetVars(varMap)
+
 		err := r.RunPaths(args)
 		if err == nil {
 			fmt.Println("All steps were run successfully")
@@ -46,5 +60,7 @@ Examples:
 }
 
 func init() {
+	runCmd.Flags().StringSliceVar(&cliVars, "var", nil, "Set variables at runtime (e.g. --var key=val)")
 	rootCmd.AddCommand(runCmd)
 }
+

@@ -1,323 +1,189 @@
-# 🏋🏽ramjam
+# 🏋🏽 ramjam
 
-A  command-line tool for testing HTTP APIs, built with Go and using the Cobra framework.
+A lightweight, declarative CLI tool for validating, testing, and automating HTTP API workflows.
 
-## Overview
+> 🤖 **Working with AI Coding Agents?** Check out the [Agentic Testing Guide](./AGENT_README.md) for prompt templates and best practices to let LLMs write and execute tests.
 
-`ramjam` is a CLI tool designed to simplify HTTP API testing and interaction. It provides an intuitive interface for making HTTP requests, inspecting responses, and validating API behavior directly from your terminal.
+---
 
-## Latest Releases
+## 🎯 Purpose & Philosophy
 
-The latest binary releases for `ramjam` can be found [here](https://github.com/michaelmccabe/ramjam/releases)
+`ramjam` is designed to simplify E2E API integration testing. Instead of writing verbose script files (using Python, Node.js, etc.) or clicking around inside heavy desktop GUIs (like Postman or Insomnia), `ramjam` lets you define sequential HTTP workflows, validation assertions, variable captures, and console outputs in clean, source-controlled YAML files.
 
-## Documentation
+It is ideal for:
+1. **Developer API Prototyping**: Run local request sequences and verify behavior directly from your terminal.
+2. **CI/CD Quality Gates**: Run verification tests inside your pipelines (GitHub Actions, GitLab CI, etc.) to ensure APIs are correct before release.
+3. **Automated Runbooks**: Script multi-step setups, logins, or migrations without writing code.
+
+---
+
+## 🔌 How to Integrate ramjam into Your Project
+
+Integrating `ramjam` takes less than 5 minutes:
+
+### 1. Structure Your Tests
+Create a test directory in your repository (e.g. `tests/integration/` or `ramjam/`) to store your test workflows and JSON payloads:
+
+```
+my-project/
+├── .github/workflows/ci.yml
+├── src/
+└── tests/integration/
+    ├── .ramjam.yaml             # Optional workspace-specific defaults
+    ├── auth_flow.yaml           # Login and token validation workflow
+    ├── create_user.yaml         # User creation workflow
+    └── payloads/
+        └── new_user.json        # External request payload JSON file
+```
+
+### 2. Define a Test Workflow
+Create a YAML file (e.g. `tests/integration/lifecycle.yaml`):
+
+```yaml
+metadata:
+  name: "User Lifecycle E2E"
+  description: "Creates, retrieves, and validates a user profile."
+
+config:
+  base_url: "https://api.example.com" # Default fallback URL
+
+workflow:
+  - step: "create-user"
+    description: "Submit new profile"
+    request:
+      method: "POST"
+      url: "/users"
+      body:
+        name: "Alice Smith"
+        role: "developer"
+    expect:
+      status: 201
+    capture:
+      - json_path: "id"
+        as: "new_user_id"
+
+  - step: "verify-user"
+    description: "Verify details on GET request"
+    request:
+      method: "GET"
+      url: "/users/${new_user_id}"
+    expect:
+      status: 200
+      json_path_match:
+        - path: "name"
+          value: "Alice Smith"
+        - path: "role"
+          value: "developer"
+```
+
+### 3. Run Locally or in CI
+Run the workflow:
+```bash
+# Execute local tests
+ramjam run ./tests/integration/
+
+# Execute staging E2E tests by overriding base URL via CLI flags
+ramjam run ./tests/integration/ --var base_url=https://api.staging.example.com
+```
+
+---
+
+## 📖 Documentation Directory
 
 | Document | Description |
-|----|----|
-| [How To Use Ramjam](./RAMJAM.md) | Complete workflow DSL reference, variable substitution, authentication patterns, and full examples |
-| [CI/CD Integration](./INTEGRATE.md) | Guide for integrating ramjam into GitHub Actions, GitLab CI, and other CI/CD pipelines |
-| [Body File Feature](./BODY_FILE_FEATURE.md) | Using external JSON files for request bodies |
+|---|---|
+| 📖 **[How To Use Ramjam](./RAMJAM.md)** | Complete workflow DSL reference, variable substitution, operators, and global config defaults |
+| 🤖 **[Agentic Testing Guide](./AGENT_README.md)** | Best practices and prompt templates for instructing AI coding agents to test APIs with Ramjam |
+| 🚀 **[CI/CD Integration](./INTEGRATE.md)** | Guide for running ramjam in GitHub Actions, GitLab CI, and other build servers |
+| 📦 **[Body File Feature](./BODY_FILE_FEATURE.md)** | Loading request body payloads dynamically from external files |
 
-## Features
+---
 
-* Simple and intuitive command-line interface
-* Built with the Cobra CLI framework
-* Configurable request timeouts
-* Verbose mode for detailed request/response information
-* Easy installation as a local binary
-* Load request bodies from external JSON files via `body_file`
+## ✨ Features
 
-## Prerequisites
+* **Lightweight CLI**: Built with Cobra for clean execution commands.
+* **Flexible Execution Paths**: Run single workflows, specific list inputs, or folders of test workflows.
+* **Structured Logs**: Concurrent real-time logging streamed using Go's standard `slog` library.
+* **Dynamic Scope Variables**: Parameterize your endpoints with workflow configuration variables, capture-mapped response fields, and CLI environment values (`--var`).
+* **Rich JSONPath Assertions**: Validate responses via `AsaiYusuke/jsonpath` supporting comparison operators (`eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`).
+* **Payload Encodings**: Built-in support for standard JSON, Form URL-Encoded (`application/x-www-form-urlencoded`), and Multipart Form-Data (`multipart/form-data`) with file uploading (`@file`).
+* **Configuration Defaults**: Zero-setup workspace or system defaults configuration files (`.ramjam.yaml`).
+* **Debugging Diagnostics**: Contextual, categorized failures mapping (`ValidationError`, `NetworkError`, `ParsingError`, `ResolutionError`).
 
-* Go 1.20 or higher
-* Make (for using Makefile commands)
+---
 
-## Installation
+## 🛠️ Installation
 
-### Quick Install
-
-Install directly to your `$GOPATH/bin` or `$GOBIN`:
-
+### Quick Install (Go Installed)
+Install to `$GOPATH/bin` or `$GOBIN`:
 ```bash
 make install
 ```
-
-This will compile and install the `ramjam` binary to your Go bin directory (typically `~/go/bin`). Make sure this directory is in your `PATH`:
-
+Make sure `~/go/bin` is in your environment shell `PATH`:
 ```bash
-# Add to your ~/.bashrc, ~/.zshrc, or equivalent
 export PATH=$PATH:$(go env GOPATH)/bin
 ```
 
-### Manual Installation
-
-
-
-1. Clone the repository:
-
+### Clone and Build from Source
 ```bash
 git clone https://github.com/michaelmccabe/ramjam.git
 cd ramjam
-```
 
-
-2\. Build the binary:
-
-```bash
-make build
-```
-
-
-3\. (Optional) Move the binary to a location in your PATH:
-
-```bash
-sudo mv bin/ramjam /usr/local/bin/
-# or
-cp bin/ramjam ~/bin/  # if ~/bin is in your PATH
-```
-
-### Building from Source
-
-```bash
-# Build for current platform
+# Build current binary
 make build
 
-# Build for all platforms (Linux, macOS, Windows)
+# Build binaries for Linux, macOS, and Windows
 make build-all
 ```
+The compiled binaries will be outputted under the local `bin/` folder.
 
-The binary will be created in the `bin/` directory.
+---
 
-## Usage
-
-For full details for how to use, see [How To Use Ramjam](./RAMJAM.md).
-
-For details on integrating with CI/CD pipelines, see [CI/CD Integration](./INTEGRATE.md).
-
-For details on using JSON files for the body of requests see  [body file feature](./BODY_FILE_FEASTURE.md).
-
-### Basic Commands
-
-Display help and available commands:
-
-```bash
-ramjam --help
-```
-
-Check version:
-
-```bash
-ramjam version
-```
-
-### Making HTTP Requests
-
-`ramjam` makes HTTP requests by running the workflows defined in the YAML files fed into the tool via the command line.
-
-### Loading Request Bodies from JSON Files
-
-Payloads can be kept in standalone JSON files and referenced with the `body_file` keyword (see [Body File Feature](./BODY_FILE_FEATURE.md)).
-
-### Running YAML Workflows
-
-Execute one or more workflow files or a directory of workflows:
-
-```bash
-ramjam run test-get.yaml
-ramjam run ./tests/integration/
-ramjam run login.yaml signup.yaml profile.yaml
-```
-
-
-You can try this out quickly yourself with the test files included
-
-```bash
-❯ ramjam run resources/testdata/success             
-[patchInputTest.yaml] Running workflow file: resources/testdata/success/patchInputTest.yaml
-[postInpuTest.yaml] Running workflow file: resources/testdata/success/postInpuTest.yaml
-[Complex POST Integration] Successfully created post from external JSON file
-[putInputTest.yaml] Running workflow file: resources/testdata/success/putInputTest.yaml
-[bodyFileDemo.yaml] Running workflow file: resources/testdata/success/bodyFileDemo.yaml
-[Body File Feature Demo] ✓ Created post using inline body
-[Body File Feature Demo] ✓ Created post using external JSON file
-[Body File Feature Demo] ✓ Captured user: Leanne Graham (Sincere@april.biz)
-[Body File Feature Demo] ✓ Updated user profile using JSON file with variables
-[simpleGetTests.yaml] Running workflow file: resources/testdata/success/simpleGetTests.yaml
-[User Cross-Reference Validation] Successfully verified Clementine Bauch lives in McKenziehaven with cache max-age 43200
-[User Cross-Reference Validation] The first post title for user 3 is: asperiores ea ipsam voluptatibus modi minima quia sint
-All steps were run successfully
-
-
-❯ ramjam run resources/testdata/fail   
-[FailingGetTests.yaml] Running workflow file: resources/testdata/fail/FailingGetTests.yaml
-Failed step: get-specific-user
-Failed step: validate-user-in-list
-Failed step: fetch-user-posts
-Error: workflow failed with 3 errors
-Usage:
-  ramjam run <files-or-folders...> [flags]
-
-Flags:
-  -h, --help   help for run
-
-Global Flags:
-  -v, --verbose   Enable verbose output
-
-Error: workflow failed with 3 errors
-```
-
-### Global Flags
-
-* `-v, --verbose`: Enable verbose output for detailed request/response information
-* `-h, --help`: Display help information
-
-## Development
+## 💻 Development
 
 ### Project Structure
-
 ```
 ramjam/
 ├── cmd/
-│   └── ramjam/           # Main application entry point
-│       ├── main.go       # Application entry
-│       └── cmd/          # Cobra command definitions
-│           ├── root.go   # Root command
-│           ├── run.go    # Run command (executes workflows)
-│           └── version.go # Version command
+│   └── ramjam/           # CLI Entrypoint
+│       ├── main.go
+│       └── cmd/          # Cobra Commands
 ├── pkg/
-│   ├── config/           # Configuration loading
-│   └── runner/           # Workflow execution logic
-├── resources/            # Test resources and examples
-├── Makefile              # Build automation
-├── go.mod                # Go module definition
-├── INTEGRATE.md          # CI/CD integration guide
-├── RAMJAM.md             # Usage documentation
-└── README.md             # This file
+│   ├── config/           # Spec & Loader
+│   └── runner/           # Workflow Evaluator Engine
+├── resources/            # Test data & sample suites
+├── Makefile              # Compile automation
+└── go.mod
 ```
 
-### Building
-
+### Development commands
 ```bash
-# Build the project
-make build
-
 # Clean build artifacts
 make clean
 
-# Run tests
+# Run test suites
 make test
 
-# Run tests with coverage
+# Run tests with coverage reporting
 make test-coverage
 
-# Tidy dependencies
-make tidy
+# Run local development build
+go run ./cmd/ramjam run resources/testdata/success
 ```
 
-### Running in Development
+---
 
-Run without building:
+## 🚀 Creating Releases
+
+Releases are fully automated via GitHub Actions. Pushing a version tag builds binaries for Linux, macOS, and Windows (AMD64 & ARM64) with SHA256 verification checksums:
 
 ```bash
-make run
-
-# Or directly with go
-go run ./cmd/ramjam
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-### Testing
+---
 
-Run all tests:
+## 💬 Support & Contribution
 
-```bash
-make test
-```
-
-Run tests with coverage report:
-
-```bash
-make test-coverage
-```
-
-## Makefile Targets
-
-* `make build` - Build the binary for the current platform
-* `make install` - Install the binary to `$GOPATH/bin`
-* `make clean` - Remove build artifacts
-* `make test` - Run all tests
-* `make test-coverage` - Run tests with coverage report
-* `make tidy` - Tidy Go module dependencies
-* `make deps` - Download dependencies
-* `make run` - Run the application without building
-* `make build-all` - Build for multiple platforms (Linux, macOS, Windows)
-* `make help` - Display available targets
-
-## Configuration
-
-Currently, `ramjam` uses command-line flags for configuration. Future versions may include support for configuration files.
-
-## Creating Releases
-
-Releases are automated via GitHub Actions. When you push a version tag, the workflow builds binaries for multiple platforms and creates a GitHub release with all assets attached.
-
-### Creating a New Release
-
-
-
-1. **Update version** (optional): Edit the default version in `cmd/ramjam/cmd/root.go` if desired
-2. **Commit your changes**:
-
-   ```bash
-   git add .
-   git commit -m "Prepare release v1.0.0"
-   ```
-3. **Create and push a version tag**:
-
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-4. The GitHub Actions workflow will automatically:
-   * Run all tests
-   * Build binaries for Linux, macOS, and Windows (both AMD64 and ARM64)
-   * Generate SHA256 checksums
-   * Create a GitHub release with all binaries attached
-
-### Release Assets
-
-Each release includes:
-
-* `ramjam-linux-amd64` - Linux (Intel/AMD)
-* `ramjam-linux-arm64` - Linux (ARM)
-* `ramjam-darwin-amd64` - macOS (Intel)
-* `ramjam-darwin-arm64` - macOS (Apple Silicon)
-* `ramjam-windows-amd64.exe` - Windows (Intel/AMD)
-* `ramjam-windows-arm64.exe` - Windows (ARM)
-* `checksums.txt` - SHA256 checksums for verification
-
-### Pre-release Versions
-
-Tags containing `-alpha`, `-beta`, or `-rc` are automatically marked as pre-releases:
-
-```bash
-git tag v1.0.0-beta.1
-git push origin v1.0.0-beta.1
-```
-
-### Version Information
-
-The version displayed by `ramjam version` is determined at build time:
-
-* **Release builds**: Version comes from the git tag (e.g., `v1.0.0`)
-* **Local builds via Make**: Version comes from `git describe` (e.g., `v1.0.0-5-g2a3b4c5`)
-* **Direct** `go build`: Uses the default value in `root.go`
-
-To build locally with a specific version:
-
-```bash
-VERSION=1.0.0 make build
-```
-
-## Support
-
-For issues, questions, or contributions, please visit the [GitHub repository](https://github.com/michaelmccabe/ramjam).
+For issues, feature requests, or contributions, please visit the [GitHub repository](https://github.com/michaelmccabe/ramjam).

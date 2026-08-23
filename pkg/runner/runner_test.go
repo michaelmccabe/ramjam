@@ -703,3 +703,213 @@ func runTestError(t *testing.T, yamlContent string) error {
 	r := New(10*time.Second, true)
 	return r.RunPaths([]string{tmpFile.Name()})
 }
+
+func TestCliVariablesOverride(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/override-endpoint" {
+			t.Errorf("expected /override-endpoint, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status": "ok"}`))
+	}))
+	defer srv.Close()
+
+	yamlContent := `
+metadata:
+  name: "CLI Variables Override"
+config:
+  base_url: "http://example.invalid"
+workflow:
+- step: "override-step"
+  request:
+    method: "GET"
+    url: "${custom_path}"
+  expect:
+    status: 200
+`
+
+	tmpFile, err := os.CreateTemp("", "runner_test_cli_*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(yamlContent); err != nil {
+		t.Fatalf("failed to write temp yaml: %v", err)
+	}
+	tmpFile.Close()
+
+	r := New(10*time.Second, true)
+	r.SetVars(map[string]string{
+		"base_url":    srv.URL,
+		"custom_path": "/override-endpoint",
+	})
+
+	if err := r.RunPaths([]string{tmpFile.Name()}); err != nil {
+		t.Fatalf("RunPaths failed: %v", err)
+	}
+}
+
+func TestJsonPathRichOperators(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"age": 25,
+			"name": "Bob",
+			"tags": ["user", "beta"],
+			"description": "Developer advocate"
+		}`))
+	}))
+	defer srv.Close()
+
+	yamlContent := fmt.Sprintf(`
+metadata:
+  name: "Rich Operators Test"
+config:
+  base_url: "%s"
+workflow:
+- step: "check-operators"
+  request:
+    method: "GET"
+    url: "/"
+  expect:
+    status: 200
+    json_path_match:
+      - path: "age"
+        operator: "gte"
+        value: 18
+      - path: "age"
+        operator: "lt"
+        value: 30
+      - path: "name"
+        operator: "ne"
+        value: "Alice"
+      - path: "tags"
+        operator: "contains"
+        value: "beta"
+      - path: "description"
+        operator: "contains"
+        value: "Developer"
+`, srv.URL)
+
+	runTest(t, yamlContent)
+}
+
+func TestRequestEncodings(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ct := r.Header.Get("Content-Type")
+		if strings.HasPrefix(ct, "application/x-www-form-urlencoded") {
+			r.ParseForm()
+			if r.FormValue("foo") != "bar" || r.FormValue("baz") != "qux" {
+				t.Errorf("urlencoded form value mismatch: %v", r.Form)
+			}
+		} else if strings.HasPrefix(ct, "multipart/form-data") {
+			r.ParseMultipartForm(10 << 20)
+			if r.FormValue("foo") != "bar" {
+				t.Errorf("multipart form value mismatch: %v", r.Form)
+			}
+			file, header, err := r.FormFile("attachment")
+			if err != nil {
+				t.Errorf("multipart FormFile err: %v", err)
+			} else {
+				content, _ := io.ReadAll(file)
+				if string(content) != "test file content" {
+					t.Errorf("multipart file content mismatch: %s", string(content))
+				}
+				if !strings.HasPrefix(header.Filename, "test-attach-") || !strings.HasSuffix(header.Filename, ".txt") {
+					t.Errorf("multipart filename mismatch: %s", header.Filename)
+				}
+				file.Close()
+			}
+		} else {
+			t.Errorf("unexpected content type: %s", ct)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	yamlUrlencoded := fmt.Sprintf(`
+metadata:
+  name: "Form Encoded Test"
+config:
+  base_url: "%s"
+workflow:
+- step: "submit-url-form"
+  request:
+    method: "POST"
+    url: "/"
+    content_type: "application/x-www-form-urlencoded"
+    body:
+      foo: "bar"
+      baz: "qux"
+  expect:
+    status: 200
+`, srv.URL)
+
+	runTest(t, yamlUrlencoded)
+
+	tmpFile, err := os.CreateTemp("", "test-attach-*.txt")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	tmpFile.WriteString("test file content")
+	tmpFile.Close()
+
+	yamlMultipart := fmt.Sprintf(`
+metadata:
+  name: "Multipart Test"
+config:
+  base_url: "%s"
+workflow:
+- step: "submit-multipart"
+  request:
+    method: "POST"
+    url: "/"
+    content_type: "multipart/form-data"
+    body:
+      foo: "bar"
+      attachment: "@%s"
+  expect:
+    status: 200
+`, srv.URL, tmpFile.Name())
+
+	runTest(t, yamlMultipart)
+}
+
+func TestGlobalConfigDefaults(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Global-Default") != "custom-header-value" {
+			t.Errorf("expected X-Global-Default header to be present")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	configYml := fmt.Sprintf(`
+defaults:
+  base_url: "%s"
+  timeout: "5s"
+  headers:
+    X-Global-Default: "custom-header-value"
+`, srv.URL)
+
+	if err := os.WriteFile(".ramjam.yaml", []byte(configYml), 0644); err != nil {
+		t.Fatalf("failed to write global config defaults: %v", err)
+	}
+	defer os.Remove(".ramjam.yaml")
+
+	yamlContent := `
+metadata:
+  name: "Global Config Defaults Test"
+workflow:
+- step: "test-step"
+  request:
+    method: "GET"
+    url: "/"
+  expect:
+    status: 200
+`
+
+	runTest(t, yamlContent)
+}

@@ -203,7 +203,7 @@ Common errors and solutions:
 
 Run the included example:
 ```bash
-./bin/ramjam run resources/testdata/success/postInpuTest.yaml -v
+./bin/ramjam run resources/testdata/success/postInputTest.yaml -v
 ```
 
 This will demonstrate both inline body and body_file usage.

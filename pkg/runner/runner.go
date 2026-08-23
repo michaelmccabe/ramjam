@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AsaiYusuke/jsonpath/v2"
 	e "github.com/michaelmccabe/ramjam/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -43,14 +47,15 @@ type (
 	}
 
 	StepRequest struct {
-		Method     string                 `yaml:"method"`
-		URL        string                 `yaml:"url"`
-		Headers    map[string]string      `yaml:"headers"`
-		Body       map[string]interface{} `yaml:"body,omitempty"`
-		BodyFile   string                 `yaml:"body_file,omitempty"`
-		Params     map[string]string      `yaml:"params"`
-		bodyData   map[string]interface{} // resolved body data
-		bodySource string                 // tracks source for debugging
+		Method      string                 `yaml:"method"`
+		URL         string                 `yaml:"url"`
+		ContentType string                 `yaml:"content_type,omitempty"`
+		Headers     map[string]string      `yaml:"headers"`
+		Body        map[string]interface{} `yaml:"body,omitempty"`
+		BodyFile    string                 `yaml:"body_file,omitempty"`
+		Params      map[string]string      `yaml:"params"`
+		bodyData    map[string]interface{} // resolved body data
+		bodySource  string                 // tracks source for debugging
 	}
 
 	StepExpect struct {
@@ -60,8 +65,9 @@ type (
 	}
 
 	JSONPathVal struct {
-		Path  string      `yaml:"path"`
-		Value interface{} `yaml:"value"`
+		Path     string      `yaml:"path"`
+		Operator string      `yaml:"operator,omitempty"`
+		Value    interface{} `yaml:"value"`
 	}
 
 	HeaderExpectation struct {
@@ -97,16 +103,133 @@ func (e *StepError) Unwrap() error {
 	return e.Err
 }
 
+type ValidationError struct {
+	Step string
+	Err  error
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("validation failed: %v", e.Err)
+}
+
+func (e *ValidationError) Unwrap() error {
+	return e.Err
+}
+
+type NetworkError struct {
+	URL string
+	Err error
+}
+
+func (e *NetworkError) Error() string {
+	return fmt.Sprintf("network request failed for %s: %v", e.URL, e.Err)
+}
+
+func (e *NetworkError) Unwrap() error {
+	return e.Err
+}
+
+type ParsingError struct {
+	Target string
+	Err    error
+}
+
+func (e *ParsingError) Error() string {
+	return fmt.Sprintf("parse error on %s: %v", e.Target, e.Err)
+}
+
+func (e *ParsingError) Unwrap() error {
+	return e.Err
+}
+
+type ResolutionError struct {
+	Target string
+	Err    error
+}
+
+func (e *ResolutionError) Error() string {
+	return fmt.Sprintf("resolution error on %s: %v", e.Target, e.Err)
+}
+
+func (e *ResolutionError) Unwrap() error {
+	return e.Err
+}
+
+type GlobalConfig struct {
+	Defaults struct {
+		BaseURL string            `yaml:"base_url"`
+		Timeout string            `yaml:"timeout"`
+		Headers map[string]string `yaml:"headers"`
+	} `yaml:"defaults"`
+}
+
 type Runner struct {
-	client  *http.Client
-	verbose bool
+	client       *http.Client
+	verbose      bool
+	logger       *slog.Logger
+	cliVars      map[string]string
+	globalConfig GlobalConfig
 }
 
 func New(timeout time.Duration, verbose bool) *Runner {
-	return &Runner{
+	level := slog.LevelInfo
+	if verbose {
+		level = slog.LevelDebug
+	}
+	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+	})
+	logger := slog.New(handler)
+	r := &Runner{
 		client:  &http.Client{Timeout: timeout},
 		verbose: verbose,
+		logger:  logger,
 	}
+	r.LoadGlobalConfig()
+	return r
+}
+
+func (r *Runner) LoadGlobalConfig() {
+	var data []byte
+	var err error
+
+	if _, errStat := os.Stat(".ramjam.yaml"); errStat == nil {
+		data, err = os.ReadFile(".ramjam.yaml")
+	} else if _, errStat := os.Stat(".ramjam.yml"); errStat == nil {
+		data, err = os.ReadFile(".ramjam.yml")
+	} else {
+		home, errHome := os.UserHomeDir()
+		if errHome == nil {
+			homeConfig := filepath.Join(home, ".ramjam.yaml")
+			if _, errStat := os.Stat(homeConfig); errStat == nil {
+				data, err = os.ReadFile(homeConfig)
+			} else {
+				homeConfigYml := filepath.Join(home, ".ramjam.yml")
+				if _, errStat := os.Stat(homeConfigYml); errStat == nil {
+					data, err = os.ReadFile(homeConfigYml)
+				}
+			}
+		}
+	}
+
+	if err != nil || len(data) == 0 {
+		return
+	}
+
+	var config GlobalConfig
+	if errUnmarshal := yaml.Unmarshal(data, &config); errUnmarshal == nil {
+		r.globalConfig = config
+		if config.Defaults.Timeout != "" {
+			d, errDuration := time.ParseDuration(config.Defaults.Timeout)
+			if errDuration == nil {
+				r.client.Timeout = d
+			}
+		}
+	}
+}
+
+func (r *Runner) SetVars(vars map[string]string) {
+	r.cliVars = vars
 }
 
 func (r *Runner) RunPaths(paths []string) error {
@@ -128,35 +251,23 @@ func (r *Runner) RunPaths(paths []string) error {
 	}
 
 	var wg sync.WaitGroup
-	type result struct {
-		logs []string
-		errs []error
-	}
-	results := make(chan result, len(files))
+	var mu sync.Mutex
+	var errs []error
 
 	for _, f := range files {
 		wg.Add(1)
 		go func(f string) {
 			defer wg.Done()
-			logs, errs := r.runFile(f)
-			results <- result{logs: logs, errs: errs}
+			fileErrs := r.runFile(f)
+			if len(fileErrs) > 0 {
+				mu.Lock()
+				errs = append(errs, fileErrs...)
+				mu.Unlock()
+			}
 		}(f)
 	}
 
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	var errs []error
-	for res := range results {
-		for _, l := range res.logs {
-			fmt.Println(l)
-		}
-		if len(res.errs) > 0 {
-			errs = append(errs, res.errs...)
-		}
-	}
+	wg.Wait()
 
 	if len(errs) == 0 {
 		return nil
@@ -191,31 +302,37 @@ func (r *Runner) collectFiles(path string) ([]string, error) {
 	return files, nil
 }
 
-func (r *Runner) runFile(path string) ([]string, []error) {
-	var logs []string
+func (r *Runner) runFile(path string) []error {
 	prefix := filepath.Base(path)
-	log := func(format string, args ...interface{}) {
-		msg := fmt.Sprintf(format, args...)
-		logs = append(logs, fmt.Sprintf("[%s] %s", prefix, msg))
-	}
-
-	log("Running workflow file: %s", path)
 
 	data, err := os.ReadFile(path)
-	if err := e.Wrapf(err, "read %s", path); err != nil {
-		return logs, []error{err}
+	if err != nil {
+		r.logger.Error("Failed to read file", "file", path, "error", err)
+		return []error{&ParsingError{Target: path, Err: err}}
 	}
 	var spec InstructionsFile
-	if err := e.Wrapf(yaml.Unmarshal(data, &spec), "parse %s", path); err != nil {
-		return logs, []error{err}
+	if err := yaml.Unmarshal(data, &spec); err != nil {
+		r.logger.Error("Failed to parse YAML", "file", path, "error", err)
+		return []error{&ParsingError{Target: path, Err: err}}
 	}
 
 	if spec.Metadata.Name != "" {
 		prefix = spec.Metadata.Name
 	}
 
+	logger := r.logger.With("workflow", prefix)
+	logger.Info("Running workflow file", "path", path)
+
+	baseURL := spec.Config.BaseURL
+	if baseURL == "" && r.globalConfig.Defaults.BaseURL != "" {
+		baseURL = r.globalConfig.Defaults.BaseURL
+	}
 	vars := map[string]string{
-		"base_url": spec.Config.BaseURL,
+		"base_url": baseURL,
+		"_dir":     filepath.Dir(path),
+	}
+	for k, v := range r.cliVars {
+		vars[k] = v
 	}
 
 	// Resolve body files relative to the YAML file's directory
@@ -229,12 +346,12 @@ func (r *Runner) runFile(path string) ([]string, []error) {
 				File:        path,
 				Step:        step.Step,
 				Description: step.Description,
-				Err:         fmt.Errorf("resolve body file: %w", err),
+				Err:         &ResolutionError{Target: step.Request.BodyFile, Err: err},
 			})
 			continue
 		}
 
-		if err := r.executeStep(step, vars, log); err != nil {
+		if err := r.executeStep(step, vars, logger); err != nil {
 			errs = append(errs, &StepError{
 				File:        path,
 				Step:        step.Step,
@@ -244,7 +361,7 @@ func (r *Runner) runFile(path string) ([]string, []error) {
 		}
 	}
 
-	return logs, errs
+	return errs
 }
 
 func (r *Runner) resolveBodyFile(step *Step, baseDir string) error {
@@ -280,10 +397,8 @@ func (r *Runner) resolveBodyFile(step *Step, baseDir string) error {
 	return nil
 }
 
-func (r *Runner) executeStep(step Step, vars map[string]string, log func(string, ...interface{})) error {
-	if r.verbose {
-		log("Executing step: %s", step.Step)
-	}
+func (r *Runner) executeStep(step Step, vars map[string]string, log *slog.Logger) error {
+	log.Debug("Executing step", "step", step.Step)
 
 	method := strings.ToUpper(strings.TrimSpace(step.Request.Method))
 	if method == "" {
@@ -297,31 +412,74 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 		}
 	}
 
-	url := requestURL
-	if !strings.HasPrefix(url, "http") && vars["base_url"] != "" {
-		url = strings.TrimSuffix(vars["base_url"], "/") + "/" + strings.TrimPrefix(url, "/")
+	reqURL := requestURL
+	if !strings.HasPrefix(reqURL, "http") && vars["base_url"] != "" {
+		reqURL = strings.TrimSuffix(vars["base_url"], "/") + "/" + strings.TrimPrefix(reqURL, "/")
 	}
+
+	contentType := strings.TrimSpace(step.Request.ContentType)
+	if contentType == "" {
+		contentType = "application/json"
+	}
+	actualContentType := contentType
 
 	bodyReader := io.Reader(nil)
 	if len(step.Request.bodyData) > 0 {
 		body := applyVarsToInterface(step.Request.bodyData, vars)
-		payload, err := json.Marshal(body)
-		if err := e.Wrap(err, "marshal body"); err != nil {
-			return err
+		bodyMap, isMap := body.(map[string]interface{})
+
+		if isMap && strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
+			formValues := url.Values{}
+			for k, v := range bodyMap {
+				formValues.Set(k, fmt.Sprint(v))
+			}
+			bodyReader = strings.NewReader(formValues.Encode())
+		} else if isMap && strings.HasPrefix(contentType, "multipart/form-data") {
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+			for k, v := range bodyMap {
+				valStr := fmt.Sprint(v)
+				if strings.HasPrefix(valStr, "@") {
+					filePath := strings.TrimPrefix(valStr, "@")
+					if !filepath.IsAbs(filePath) {
+						filePath = filepath.Join(vars["_dir"], filePath)
+					}
+					file, err := os.Open(filePath)
+					if err == nil {
+						part, errPart := writer.CreateFormFile(k, filepath.Base(filePath))
+						if errPart == nil {
+							io.Copy(part, file)
+						}
+						file.Close()
+						continue
+					}
+				}
+				writer.WriteField(k, valStr)
+			}
+			writer.Close()
+			bodyReader = &buf
+			actualContentType = writer.FormDataContentType()
+		} else {
+			payload, err := json.Marshal(body)
+			if err != nil {
+				return &ParsingError{Target: "request body", Err: err}
+			}
+			bodyReader = bytes.NewReader(payload)
 		}
-		bodyReader = bytes.NewReader(payload)
-		if r.verbose && step.Request.bodySource != "" {
-			log("Using body from: %s", step.Request.bodySource)
-		}
+		log.Debug("Using body from", "source", step.Request.bodySource)
 	}
 
-	req, err := http.NewRequest(method, url, bodyReader)
-	if err := e.Wrap(err, "build request"); err != nil {
-		return err
+	req, err := http.NewRequest(method, reqURL, bodyReader)
+	if err != nil {
+		return &ResolutionError{Target: "request URL", Err: err}
 	}
 	req.Header.Set("User-Agent", "ramjam-cli")
 	if bodyReader != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", actualContentType)
+	}
+
+	for k, v := range r.globalConfig.Defaults.Headers {
+		req.Header.Set(k, applyVars(v, vars))
 	}
 
 	for k, v := range step.Request.Headers {
@@ -337,71 +495,105 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 	}
 
 	resp, err := r.client.Do(req)
-	if err := e.Wrap(err, "request"); err != nil {
-		return err
+	if err != nil {
+		return &NetworkError{URL: reqURL, Err: err}
 	}
 	defer resp.Body.Close()
 
-	if r.verbose {
-		log("Received status: %d", resp.StatusCode)
-	}
+	log.Debug("Received status", "status", resp.StatusCode)
 
 	if step.Expect.Status != 0 && resp.StatusCode != step.Expect.Status {
-		return fmt.Errorf("expected status %d, got %d", step.Expect.Status, resp.StatusCode)
+		return &ValidationError{
+			Step: step.Step,
+			Err:  fmt.Errorf("expected status %d, got %d", step.Expect.Status, resp.StatusCode),
+		}
 	}
 
 	for _, headerExpect := range step.Expect.Headers {
 		name := strings.TrimSpace(headerExpect.Name)
 		if name == "" {
-			return fmt.Errorf("header expectation must specify a name")
+			return &ValidationError{
+				Step: step.Step,
+				Err:  fmt.Errorf("header expectation must specify a name"),
+			}
 		}
 		if headerExpect.Value == "" && headerExpect.Contains == "" {
-			return fmt.Errorf("header expectation for %s must specify value or contains", name)
+			return &ValidationError{
+				Step: step.Step,
+				Err:  fmt.Errorf("header expectation for %s must specify value or contains", name),
+			}
 		}
 		actual := resp.Header.Get(name)
 		if headerExpect.Value != "" {
 			expected := applyVars(headerExpect.Value, vars)
-			if r.verbose {
-				log("Asserting header %s == %s", name, expected)
-			}
+			log.Debug("Asserting header equals", "header", name, "expected", expected)
 			if actual != expected {
-				return fmt.Errorf("expected header %s to equal %q, got %q", name, expected, actual)
+				return &ValidationError{
+					Step: step.Step,
+					Err:  fmt.Errorf("expected header %s to equal %q, got %q", name, expected, actual),
+				}
 			}
 		}
 		if headerExpect.Contains != "" {
 			expected := applyVars(headerExpect.Contains, vars)
-			if r.verbose {
-				log("Asserting header %s contains %s", name, expected)
-			}
+			log.Debug("Asserting header contains", "header", name, "contains", expected)
 			if !strings.Contains(actual, expected) {
-				return fmt.Errorf("expected header %s to contain %q, got %q", name, expected, actual)
+				return &ValidationError{
+					Step: step.Step,
+					Err:  fmt.Errorf("expected header %s to contain %q, got %q", name, expected, actual),
+				}
 			}
 		}
 	}
 
 	rawBody, err := io.ReadAll(resp.Body)
-	if err := e.Wrap(err, "read body"); err != nil {
-		return err
+	if err != nil {
+		return &ParsingError{Target: "response body read", Err: err}
 	}
 
 	var jsonObj interface{}
 	if len(rawBody) > 0 {
-		if err := e.Wrap(json.Unmarshal(rawBody, &jsonObj), "parse response json"); err != nil {
-			return err
+		if err := json.Unmarshal(rawBody, &jsonObj); err != nil {
+			return &ParsingError{Target: "response body JSON", Err: err}
 		}
 	}
 
 	for _, matcher := range step.Expect.JSONPathMatch {
 		actual, err := evalJSONPath(jsonObj, matcher.Path)
-		if err := e.Wrapf(err, "jsonpath %s", matcher.Path); err != nil {
-			return err
+		if err != nil {
+			return &ValidationError{
+				Step: step.Step,
+				Err:  fmt.Errorf("jsonpath %s evaluation failed: %w", matcher.Path, err),
+			}
 		}
+
+		op := strings.ToLower(strings.TrimSpace(matcher.Operator))
+		if op == "" {
+			op = "eq"
+		}
+
 		expected := applyVars(fmt.Sprint(matcher.Value), vars)
-		if r.verbose {
-			log("Asserting %s == %s", matcher.Path, expected)
+		log.Debug("Asserting JSONPath", "path", matcher.Path, "op", op, "expected", expected)
+
+		passed, err := evaluateMatch(actual, op, expected)
+		if err != nil {
+			return &ValidationError{
+				Step: step.Step,
+				Err:  fmt.Errorf("jsonpath %s assertion failed: %w", matcher.Path, err),
+			}
 		}
-		if fmt.Sprint(actual) != expected {
-			return fmt.Errorf("jsonpath %s expected %q, got %q", matcher.Path, expected, actual)
+
+		if !passed {
+			if op == "eq" {
+				return &ValidationError{
+					Step: step.Step,
+					Err:  fmt.Errorf("jsonpath %s expected %q, got %q", matcher.Path, expected, actual),
+				}
+			}
+			return &ValidationError{
+				Step: step.Step,
+				Err:  fmt.Errorf("jsonpath %s expected operator %q value %q, got %q", matcher.Path, op, expected, actual),
+			}
 		}
 	}
 
@@ -411,15 +603,18 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 
 		if cap.JSONPath != "" {
 			val, err = evalJSONPath(jsonObj, cap.JSONPath)
-			if err := e.Wrapf(err, "capture json_path %s", cap.JSONPath); err != nil {
-				return err
+			if err != nil {
+				return &ValidationError{
+					Step: step.Step,
+					Err:  fmt.Errorf("capture json_path %s: %w", cap.JSONPath, err),
+				}
 			}
 		} else if cap.Header != "" {
 			headerVal := resp.Header.Get(cap.Header)
 			if cap.Regex != "" {
 				re, err := regexp.Compile(cap.Regex)
-				if err := e.Wrapf(err, "invalid regex %s", cap.Regex); err != nil {
-					return err
+				if err != nil {
+					return &ResolutionError{Target: "capture regex", Err: err}
 				}
 				matches := re.FindStringSubmatch(headerVal)
 				if len(matches) > 1 {
@@ -427,24 +622,28 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log func(string,
 				} else if len(matches) > 0 {
 					val = matches[0]
 				} else {
-					return fmt.Errorf("regex %s did not match header %s value %q", cap.Regex, cap.Header, headerVal)
+					return &ValidationError{
+						Step: step.Step,
+						Err:  fmt.Errorf("regex %s did not match header %s value %q", cap.Regex, cap.Header, headerVal),
+					}
 				}
 			} else {
 				val = headerVal
 			}
 		} else {
-			return fmt.Errorf("capture must specify json_path or header")
+			return &ResolutionError{
+				Target: "capture rule",
+				Err:    fmt.Errorf("capture must specify json_path or header"),
+			}
 		}
 
-		if r.verbose {
-			log("Captured %s => %s", cap.As, fmt.Sprint(val))
-		}
+		log.Debug("Captured variable", "name", cap.As, "value", val)
 		vars[cap.As] = fmt.Sprint(val)
 	}
 
 	if step.Output.Print != "" {
 		msg := applyVars(step.Output.Print, vars)
-		log("%s", msg)
+		log.Info(msg)
 	}
 
 	return nil
@@ -487,87 +686,88 @@ func evalJSONPath(obj interface{}, path string) (interface{}, error) {
 		return nil, fmt.Errorf("empty path")
 	}
 
-	// Handle filter of form $[?(@.field==value)].rest (value may be quoted or bare)
-	if m := regexp.MustCompile(`^\$\[\?\(@\.([A-Za-z0-9_\-]+)==['"]?([^'"]+)['"]?\)\](?:\.(.*))?$`).FindStringSubmatch(p); m != nil {
-		field, val, rest := m[1], m[2], m[3]
-		arr, ok := obj.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("expected array for filter %s", path)
+	// Normalize path: prepend $. if missing
+	if !strings.HasPrefix(p, "$") {
+		if strings.HasPrefix(p, "[") {
+			p = "$" + p
+		} else {
+			p = "$." + p
 		}
-		var matches []interface{}
-		for _, el := range arr {
-			if mp, ok := el.(map[string]interface{}); ok {
-				if fmt.Sprint(mp[field]) == val {
-					matches = append(matches, el)
-				}
-			}
-		}
-		if len(matches) == 0 {
-			return nil, fmt.Errorf("no match for filter %s", path)
-		}
-		selected := matches[0]
-		if rest != "" {
-			return evalJSONPath(selected, rest)
-		}
-		return matches, nil
 	}
 
-	// Handle index of form $[0].rest
-	if m := regexp.MustCompile(`^\$\[([0-9]+)\](?:\.(.*))?$`).FindStringSubmatch(p); m != nil {
-		idx, _ := strconv.Atoi(m[1])
-		arr, ok := obj.([]interface{})
-		if !ok {
-			return nil, fmt.Errorf("expected array for index %s", path)
-		}
-		if idx < 0 || idx >= len(arr) {
-			return nil, fmt.Errorf("index out of range for %s", path)
-		}
-		selected := arr[idx]
-		if rest := m[2]; rest != "" {
-			return evalJSONPath(selected, rest)
-		}
-		return selected, nil
+	// Retrieve values using github.com/AsaiYusuke/jsonpath/v2
+	res, err := jsonpath.Retrieve(p, obj)
+	if err != nil {
+		return nil, err
 	}
 
-	// Trim leading $ or $.
-	p = strings.TrimPrefix(strings.TrimPrefix(p, "$."), "$")
-	segments := strings.Split(p, ".")
-	cur := obj
-	for _, seg := range segments {
-		if seg == "" {
-			continue
-		}
-		name := seg
-		idx := -1
-		if strings.Contains(seg, "[") && strings.HasSuffix(seg, "]") {
-			parts := strings.SplitN(seg, "[", 2)
-			name = parts[0]
-			idStr := strings.TrimSuffix(parts[1], "]")
-			if idStr != "" {
-				parsed, err := strconv.Atoi(idStr)
-				if err != nil {
-					return nil, fmt.Errorf("invalid index in segment %s", seg)
-				}
-				idx = parsed
-			}
-		}
-		if name != "" {
-			m, ok := cur.(map[string]interface{})
-			if !ok {
-				return nil, fmt.Errorf("expected object for segment %s", name)
-			}
-			cur = m[name]
-		}
-		if idx >= 0 {
-			arr, ok := cur.([]interface{})
-			if !ok {
-				return nil, fmt.Errorf("expected array for segment %s", seg)
-			}
-			if idx < 0 || idx >= len(arr) {
-				return nil, fmt.Errorf("index out of range for segment %s", seg)
-			}
-			cur = arr[idx]
-		}
+	if len(res) == 0 {
+		return nil, fmt.Errorf("no match found for path %q", path)
 	}
-	return cur, nil
+
+	// For compatibility with single value assertions, if there is exactly one match, 
+	// return that single element. Otherwise return the whole slice.
+	if len(res) == 1 {
+		return res[0], nil
+	}
+
+	return res, nil
 }
+
+func evaluateMatch(actual interface{}, operator string, expectedStr string) (bool, error) {
+	actualStr := fmt.Sprint(actual)
+
+	switch operator {
+	case "eq":
+		return actualStr == expectedStr, nil
+	case "ne":
+		return actualStr != expectedStr, nil
+	case "contains":
+		switch act := actual.(type) {
+		case []interface{}:
+			for _, item := range act {
+				if fmt.Sprint(item) == expectedStr {
+					return true, nil
+				}
+			}
+			return false, nil
+		case []string:
+			for _, item := range act {
+				if item == expectedStr {
+					return true, nil
+				}
+			}
+			return false, nil
+		default:
+			return strings.Contains(actualStr, expectedStr), nil
+		}
+	case "gt", "gte", "lt", "lte":
+		actualFloat, errAct := strconv.ParseFloat(actualStr, 64)
+		expectedFloat, errExp := strconv.ParseFloat(expectedStr, 64)
+		if errAct != nil || errExp != nil {
+			switch operator {
+			case "gt":
+				return actualStr > expectedStr, nil
+			case "gte":
+				return actualStr >= expectedStr, nil
+			case "lt":
+				return actualStr < expectedStr, nil
+			case "lte":
+				return actualStr <= expectedStr, nil
+			}
+		}
+		switch operator {
+		case "gt":
+			return actualFloat > expectedFloat, nil
+		case "gte":
+			return actualFloat >= expectedFloat, nil
+		case "lt":
+			return actualFloat < expectedFloat, nil
+		case "lte":
+			return actualFloat <= expectedFloat, nil
+		}
+	}
+
+	return false, fmt.Errorf("unsupported operator %q", operator)
+}
+
