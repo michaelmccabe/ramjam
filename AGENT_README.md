@@ -4,10 +4,9 @@
 
 Copy and paste this snippet into your system prompt or instruction context to direct visiting AI agents to use Ramjam:
 
-```toml
-[testing_instructions]
-We use `ramjam` for API integration testing. Do NOT write JavaScript, Python, or bash-curl scripts for tests.
-Instead, read the comprehensive guidelines in the Agent Testing Guide ([AGENT_README.md](https://github.com/michaelmccabe/ramjam/blob/main/AGENT_README.md) or the local [AGENT_README.md](./AGENT_README.md) file at the root of the repository) to learn how to write declarative YAML workflows in the `tests/integration/` folder, run the tests, and validate the results.
+```markdown
+Read the Ramjam Agentic Testing Guide on GitHub to learn how to write, build, run, and validate API integration tests in this repository:
+https://github.com/michaelmccabe/ramjam/blob/main/AGENT_README.md
 ```
 
 ---
@@ -16,12 +15,35 @@ Instead, read the comprehensive guidelines in the Agent Testing Guide ([AGENT_RE
 
 You are an AI coding agent tasked with building, modifying, or testing API endpoints in this repository. Follow these strict guidelines to write, execute, and validate integration tests using Ramjam:
 
-### 1. Test Location & File Format
+### 1. Loading and Building the Tool
+
+Before running any tests, you must load or compile the `ramjam` binary. Use one of the following methods depending on your environment:
+
+#### Option A: Build from Source (Go installed)
+If you have Go installed on your system, clone the repository and build the binary:
+```bash
+git clone https://github.com/michaelmccabe/ramjam.git
+cd ramjam
+make build
+```
+This compiles the binary to `./bin/ramjam`. You can run local tests using `./bin/ramjam`.
+Alternatively, run `make install` to install it to your `$GOPATH/bin` (make sure that path is in your shell `PATH`).
+
+#### Option B: Download Pre-built Binary (No Go installed / CI/CD)
+To download the pre-compiled binary for your system (e.g., Linux amd64) and install it globally:
+```bash
+curl -L -o ramjam https://github.com/michaelmccabe/ramjam/releases/download/v1.0.0-beta.1/ramjam-linux-amd64
+chmod +x ramjam
+sudo mv ramjam /usr/local/bin/
+```
+Once installed, run it globally using `ramjam`.
+
+### 2. Test Location & File Format
 * Write all test workflows as declarative YAML files.
 * Save all test files in the `tests/integration/` directory (e.g., `tests/integration/user_lifecycle.yaml`).
 * For large request payloads, save them as external JSON files in `tests/integration/payloads/` and reference them.
 
-### 2. Workflow Document Schema
+### 3. Workflow Document Schema
 Each test file must adhere to the following schema:
 * **`metadata`**: Describes the test suite.
   ```yaml
@@ -36,7 +58,7 @@ Each test file must adhere to the following schema:
   ```
 * **`workflow`**: A sequential list of steps.
 
-### 3. Step Schema & Capabilities
+### 4. Step Schema & Capabilities
 Each step within the `workflow` list must contain:
 * **`step`**: A unique string identifier (e.g. `authenticate`, `create-user`).
 * **`description`**: A short explanation of the step.
@@ -61,7 +83,7 @@ Each step within the `workflow` list must contain:
   * `as`: Name of the variable to store the value in (referenced as `${name}`).
 * **`output`**: Prints messages to the console using `print` (supports `${variable}` substitution).
 
-### 4. Typical E2E Workflow Example
+### 5. Typical E2E Workflow Example
 ```yaml
 metadata:
   name: "Agent Auth & Post lifecycle"
@@ -115,14 +137,14 @@ workflow:
           value: "draft"
 ```
 
-### 5. Running and Executing Tests
-Use the terminal tool to run and validate test paths:
-* **Run a directory of tests**: `ramjam run ./tests/integration/`
-* **Run a single test file**: `ramjam run lifecycle.yaml`
+### 6. Running and Executing Tests
+Use the terminal tool to run and validate test paths (prefixed with `./bin/` if using the locally built binary):
+* **Run a directory of tests**: `ramjam run ./tests/integration/` or `./bin/ramjam run ./tests/integration/`
+* **Run a single test file**: `ramjam run lifecycle.yaml` or `./bin/ramjam run lifecycle.yaml`
 * **Override variables at runtime**: Use `--var` to set or override defaults (e.g., `--var base_url=https://api.staging.example.com`).
 * **Enable verbose logging**: Use `--verbose` or `-v` flags.
 
-### 6. Test Validation & Self-Healing Loop
+### 7. Test Validation & Self-Healing Loop
 * **Exiting**: The CLI exits with code `0` on success. It exits with a non-zero code if any step fails.
 * **Structured Logs**: Results are outputted to stdout/stderr using Go's standard `slog` library as structured JSON or key-value pairs (easy for you to parse).
 * **Self-Healing Diagnostics**: If a test fails under verbose mode, the engine outputs structured slog errors:
@@ -135,3 +157,9 @@ Use the terminal tool to run and validate test paths:
   * `NetworkError`: The connection timed out, DNS lookup failed, or connection was refused.
   * `ParsingError`: Invalid JSON formatting in the request payload or server response.
   * `ResolutionError`: A referenced file (such as a `body_file` or a multipart `@file` upload) was missing or inaccessible.
+
+### 8. Additional Reference Documentation
+If you require advanced settings, refer to the detailed references:
+* **Workflow DSL & CLI Guide** ([RAMJAM.md](./RAMJAM.md) or on GitHub: [RAMJAM.md](https://github.com/michaelmccabe/ramjam/blob/main/RAMJAM.md)): Contains the complete workflow DSL reference, variable parameters, query parameters handling, validation operators, and environment settings.
+* **External Payload Files Guide** ([BODY_FILE_FEATURE.md](./BODY_FILE_FEATURE.md) or on GitHub: [BODY_FILE_FEATURE.md](https://github.com/michaelmccabe/ramjam/blob/main/BODY_FILE_FEATURE.md)): Details how to extract request body payloads to external JSON files (via `body_file`), path resolution rules, and dynamic variable replacements inside files.
+
