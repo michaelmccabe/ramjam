@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	Version = "0.0.2-development" // Version is the version of the CLI tool
+	Version = "1.0.1-development" // Version is the version of the CLI tool
 
 	rootCmd = &cobra.Command{
 		Use:   "ramjam",
