@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,10 +53,10 @@ type (
 		URL         string                 `yaml:"url"`
 		ContentType string                 `yaml:"content_type,omitempty"`
 		Headers     map[string]string      `yaml:"headers"`
-		Body        map[string]interface{} `yaml:"body,omitempty"`
+		Body        map[string]any `yaml:"body,omitempty"`
 		BodyFile    string                 `yaml:"body_file,omitempty"`
 		Params      map[string]string      `yaml:"params"`
-		bodyData    map[string]interface{} // resolved body data
+		bodyData    map[string]any // resolved body data
 		bodySource  string                 // tracks source for debugging
 	}
 
@@ -67,7 +69,7 @@ type (
 	JSONPathVal struct {
 		Path     string      `yaml:"path"`
 		Operator string      `yaml:"operator,omitempty"`
-		Value    interface{} `yaml:"value"`
+		Value    any `yaml:"value"`
 	}
 
 	HeaderExpectation struct {
@@ -387,7 +389,7 @@ func (r *Runner) resolveBodyFile(step *Step, baseDir string) error {
 	}
 
 	// Parse the JSON
-	var bodyData map[string]interface{}
+	var bodyData map[string]any
 	if err := e.Wrapf(json.Unmarshal(data, &bodyData), "parse body file %s", step.Request.BodyFile); err != nil {
 		return err
 	}
@@ -426,7 +428,7 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log *slog.Logger
 	bodyReader := io.Reader(nil)
 	if len(step.Request.bodyData) > 0 {
 		body := applyVarsToInterface(step.Request.bodyData, vars)
-		bodyMap, isMap := body.(map[string]interface{})
+		bodyMap, isMap := body.(map[string]any)
 
 		if isMap && strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
 			formValues := url.Values{}
@@ -445,16 +447,24 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log *slog.Logger
 						filePath = filepath.Join(vars["_dir"], filePath)
 					}
 					file, err := os.Open(filePath)
-					if err == nil {
-						part, errPart := writer.CreateFormFile(k, filepath.Base(filePath))
-						if errPart == nil {
-							io.Copy(part, file)
-						}
-						file.Close()
-						continue
+					if err != nil {
+						return &ResolutionError{Target: "multipart file", Err: err}
 					}
+					part, err := writer.CreateFormFile(k, filepath.Base(filePath))
+					if err != nil {
+						file.Close()
+						return &ResolutionError{Target: "multipart form file part", Err: err}
+					}
+					if _, err := io.Copy(part, file); err != nil {
+						file.Close()
+						return &ResolutionError{Target: "multipart file copy", Err: err}
+					}
+					file.Close()
+					continue
 				}
-				writer.WriteField(k, valStr)
+				if err := writer.WriteField(k, valStr); err != nil {
+					return &ResolutionError{Target: "multipart field", Err: err}
+				}
 			}
 			writer.Close()
 			bodyReader = &buf
@@ -469,7 +479,7 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log *slog.Logger
 		log.Debug("Using body from", "source", step.Request.bodySource)
 	}
 
-	req, err := http.NewRequest(method, reqURL, bodyReader)
+	req, err := http.NewRequestWithContext(context.Background(), method, reqURL, bodyReader)
 	if err != nil {
 		return &ResolutionError{Target: "request URL", Err: err}
 	}
@@ -551,7 +561,7 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log *slog.Logger
 		return &ParsingError{Target: "response body read", Err: err}
 	}
 
-	var jsonObj interface{}
+	var jsonObj any
 	if len(rawBody) > 0 {
 		if err := json.Unmarshal(rawBody, &jsonObj); err != nil {
 			return &ParsingError{Target: "response body JSON", Err: err}
@@ -598,7 +608,7 @@ func (r *Runner) executeStep(step Step, vars map[string]string, log *slog.Logger
 	}
 
 	for _, cap := range step.Capture {
-		var val interface{}
+		var val any
 		var err error
 
 		if cap.JSONPath != "" {
@@ -661,16 +671,16 @@ func applyVars(input string, vars map[string]string) string {
 	})
 }
 
-func applyVarsToInterface(val interface{}, vars map[string]string) interface{} {
+func applyVarsToInterface(val any, vars map[string]string) any {
 	switch v := val.(type) {
 	case string:
 		return applyVars(v, vars)
-	case []interface{}:
+	case []any:
 		for i := range v {
 			v[i] = applyVarsToInterface(v[i], vars)
 		}
 		return v
-	case map[string]interface{}:
+	case map[string]any:
 		for k := range v {
 			v[k] = applyVarsToInterface(v[k], vars)
 		}
@@ -680,7 +690,7 @@ func applyVarsToInterface(val interface{}, vars map[string]string) interface{} {
 	}
 }
 
-func evalJSONPath(obj interface{}, path string) (interface{}, error) {
+func evalJSONPath(obj any, path string) (any, error) {
 	p := strings.TrimSpace(path)
 	if p == "" {
 		return nil, fmt.Errorf("empty path")
@@ -714,7 +724,7 @@ func evalJSONPath(obj interface{}, path string) (interface{}, error) {
 	return res, nil
 }
 
-func evaluateMatch(actual interface{}, operator string, expectedStr string) (bool, error) {
+func evaluateMatch(actual any, operator string, expectedStr string) (bool, error) {
 	actualStr := fmt.Sprint(actual)
 
 	switch operator {
@@ -724,20 +734,12 @@ func evaluateMatch(actual interface{}, operator string, expectedStr string) (boo
 		return actualStr != expectedStr, nil
 	case "contains":
 		switch act := actual.(type) {
-		case []interface{}:
-			for _, item := range act {
-				if fmt.Sprint(item) == expectedStr {
-					return true, nil
-				}
-			}
-			return false, nil
+		case []any:
+			return slices.ContainsFunc(act, func(item any) bool {
+				return fmt.Sprint(item) == expectedStr
+			}), nil
 		case []string:
-			for _, item := range act {
-				if item == expectedStr {
-					return true, nil
-				}
-			}
-			return false, nil
+			return slices.Contains(act, expectedStr), nil
 		default:
 			return strings.Contains(actualStr, expectedStr), nil
 		}

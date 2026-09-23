@@ -7,9 +7,10 @@ A lightweight, declarative CLI tool for validating, testing, and automating HTTP
 ## 🤖 Ramjam for AI Coding Agents & LLM Workflows
 
 Ramjam is designed to be an **Agentic-Native API Testing Engine**. While humans love using Ramjam for its simplicity, **AI coding agents (like Gemini, Cursor, and Copilot) find it significantly more reliable than writing traditional script-based test code** because it avoids:
-* ❌ Compile-time syntax and package errors (TypeScript configs, module loaders, npm dependencies).
-* ❌ Mocking and timing issues (async/await callback hell).
-* ❌ Heavy setup/teardown bloat (configuring virtualenvs, packages, node_modules).
+
+- ❌ Compile-time syntax and package errors (TypeScript configs, module loaders, npm dependencies).
+- ❌ Mocking and timing issues (async/await callback hell).
+- ❌ Heavy setup/teardown bloat (configuring virtualenvs, packages, node_modules).
 
 By providing a declarative YAML interface, agents can build and execute robust API integration tests with high predictability. Read the full [Agentic Testing Guide](./AGENT_README.md) for more details.
 
@@ -20,6 +21,7 @@ By providing a declarative YAML interface, agents can build and execute robust A
 `ramjam` is designed to simplify E2E API integration testing. Instead of writing verbose script files (using Python, Node.js, etc.) or clicking around inside heavy desktop GUIs (like Postman or Insomnia), `ramjam` lets you define sequential HTTP workflows, validation assertions, variable captures, and console outputs in clean, source-controlled YAML files.
 
 It is ideal for:
+
 1. **Developer API Prototyping**: Run local request sequences and verify behavior directly from your terminal.
 2. **CI/CD Quality Gates**: Run verification tests inside your pipelines (GitHub Actions, GitLab CI, etc.) to ensure APIs are correct before release.
 3. **Automated Runbooks**: Script multi-step setups, logins, or migrations without writing code.
@@ -31,6 +33,7 @@ It is ideal for:
 Integrating `ramjam` takes less than 5 minutes:
 
 ### 1. Structure Your Tests
+
 Create a test directory in your repository (e.g. `tests/integration/` or `ramjam/`) to store your test workflows and JSON payloads:
 
 ```
@@ -46,6 +49,7 @@ my-project/
 ```
 
 ### 2. Define a Test Workflow
+
 Create a YAML file (e.g. `tests/integration/lifecycle.yaml`):
 
 ```yaml
@@ -86,7 +90,9 @@ workflow:
 ```
 
 ### 3. Run Locally or in CI
+
 Run the workflow:
+
 ```bash
 # Execute local tests
 ramjam run ./tests/integration/
@@ -99,41 +105,46 @@ ramjam run ./tests/integration/ --var base_url=https://api.staging.example.com
 
 ## 📖 Documentation Directory
 
-| Document | Description |
-|---|---|
-| 📖 **[How To Use Ramjam](./RAMJAM.md)** | Complete workflow DSL reference, variable substitution, operators, and global config defaults |
-| 🤖 **[Agentic Testing Guide](./AGENT_README.md)** | Best practices and prompt templates for instructing AI coding agents to test APIs with Ramjam |
-| 🚀 **[CI/CD Integration](./INTEGRATE.md)** | Guide for running ramjam in GitHub Actions, GitLab CI, and other build servers |
-| 📦 **[Body File Feature](./BODY_FILE_FEATURE.md)** | Loading request body payloads dynamically from external files |
+| Document                                           | Description                                                                                   |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 📖 [**How To Use Ramjam**](./RAMJAM.md)            | Complete workflow DSL reference, variable substitution, operators, and global config defaults |
+| 🤖 [**Agentic Testing Guide**](./AGENT_README.md)  | Best practices and prompt templates for instructing AI coding agents to test APIs with Ramjam |
+| 🚀 [**CI/CD Integration**](./INTEGRATE.md)         | Guide for running ramjam in GitHub Actions, GitLab CI, and other build servers                |
+| 📦 [**Body File Feature**](./BODY_FILE_FEATURE.md) | Loading request body payloads dynamically from external files                                 |
 
 ---
 
 ## ✨ Features
 
-* **Lightweight CLI**: Built with Cobra for clean execution commands.
-* **Flexible Execution Paths**: Run single workflows, specific list inputs, or folders of test workflows.
-* **Structured Logs**: Concurrent real-time logging streamed using Go's standard `slog` library.
-* **Dynamic Scope Variables**: Parameterize your endpoints with workflow configuration variables, capture-mapped response fields, and CLI environment values (`--var`).
-* **Rich JSONPath Assertions**: Validate responses via `AsaiYusuke/jsonpath` supporting comparison operators (`eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`).
-* **Payload Encodings**: Built-in support for standard JSON, Form URL-Encoded (`application/x-www-form-urlencoded`), and Multipart Form-Data (`multipart/form-data`) with file uploading (`@file`).
-* **Configuration Defaults**: Zero-setup workspace or system defaults configuration files (`.ramjam.yaml`).
-* **Debugging Diagnostics**: Contextual, categorized failures mapping (`ValidationError`, `NetworkError`, `ParsingError`, `ResolutionError`).
+- **Lightweight CLI**: Built with Cobra for clean execution commands.
+- **Flexible Execution Paths**: Run single workflows, specific list inputs, or folders of test workflows.
+- **Structured Logs**: Concurrent real-time logging streamed using Go's standard `slog` library.
+- **Dynamic Scope Variables**: Parameterize your endpoints with workflow configuration variables, capture-mapped response fields, and CLI environment values (`--var`).
+- **Rich JSONPath Assertions**: Validate responses via `AsaiYusuke/jsonpath` supporting comparison operators (`eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`).
+- **Payload Encodings**: Built-in support for standard JSON, Form URL-Encoded (`application/x-www-form-urlencoded`), and Multipart Form-Data (`multipart/form-data`) with file uploading (`@file`).
+- **Configuration Defaults**: Zero-setup workspace or system defaults configuration files (`.ramjam.yaml`).
+- **Debugging Diagnostics**: Contextual, categorized failures mapping (`ValidationError`, `NetworkError`, `ParsingError`, `ResolutionError`).
 
 ---
 
 ## 🛠️ Installation
 
 ### Quick Install (Go Installed)
+
 Install to `$GOPATH/bin` or `$GOBIN`:
+
 ```bash
 make install
 ```
+
 Make sure `~/go/bin` is in your environment shell `PATH`:
+
 ```bash
 export PATH=$PATH:$(go env GOPATH)/bin
 ```
 
 ### Clone and Build from Source
+
 ```bash
 git clone https://github.com/michaelmccabe/ramjam.git
 cd ramjam
@@ -144,6 +155,7 @@ make build
 # Build binaries for Linux, macOS, and Windows
 make build-all
 ```
+
 The compiled binaries will be outputted under the local `bin/` folder.
 
 ---
@@ -151,6 +163,7 @@ The compiled binaries will be outputted under the local `bin/` folder.
 ## 💻 Development
 
 ### Project Structure
+
 ```
 ramjam/
 ├── cmd/
@@ -166,6 +179,7 @@ ramjam/
 ```
 
 ### Development commands
+
 ```bash
 # Clean build artifacts
 make clean

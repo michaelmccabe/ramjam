@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -40,9 +41,14 @@ Examples:
 			return nil
 		}
 
-		if errs, ok := err.(interface{ Unwrap() []error }); ok {
-			for _, e := range errs.Unwrap() {
-				if se, ok := e.(*runner.StepError); ok {
+		// errors.Join produces a multi-error that implements Unwrap() []error.
+		type multiErr interface{ Unwrap() []error }
+		var me multiErr
+		if errors.As(err, &me) {
+			unwrapped := me.Unwrap()
+			for _, e := range unwrapped {
+				var se *runner.StepError
+				if errors.As(e, &se) {
 					fmt.Printf("Failed step: %s\n", se.Step)
 					if verbose {
 						fmt.Printf("Description: %s\n", se.Description)
@@ -52,7 +58,7 @@ Examples:
 					fmt.Printf("Error: %v\n", e)
 				}
 			}
-			return fmt.Errorf("workflow failed with %d errors", len(errs.Unwrap()))
+			return fmt.Errorf("workflow failed with %d errors", len(unwrapped))
 		}
 
 		return fmt.Errorf("run failed: %w", err)

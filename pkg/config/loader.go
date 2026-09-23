@@ -21,13 +21,13 @@ func NewLoader(basePath string) *Loader {
 }
 
 // Load reads a YAML file and unmarshals it into the provided target
-func (l *Loader) Load(filename string, target interface{}) error {
+func (l *Loader) Load(filename string, target any) error {
 	path := filepath.Join(l.basePath, filename)
 	return LoadFile(path, target)
 }
 
 // LoadFile reads a YAML file from the given path and unmarshals it into the target
-func LoadFile(path string, target interface{}) error {
+func LoadFile(path string, target any) error {
 	data, err := os.ReadFile(path)
 	if err := e.Wrapf(err, "failed to read file %s", path); err != nil {
 		return err
@@ -37,11 +37,11 @@ func LoadFile(path string, target interface{}) error {
 }
 
 // Parse parses YAML data and unmarshals it into the target
-func Parse(data []byte, target interface{}) error {
+func Parse(data []byte, target any) error {
 	return e.Wrap(yaml.Unmarshal(data, target), "failed to parse YAML")
 }
 
 // LoadBytes is a convenience function to load YAML from embedded bytes
-func LoadBytes(data []byte, target interface{}) error {
+func LoadBytes(data []byte, target any) error {
 	return Parse(data, target)
 }
